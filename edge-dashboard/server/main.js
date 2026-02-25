@@ -1,6 +1,6 @@
 // server/main.js
 import { Meteor } from 'meteor/meteor';
-import { Providers, Parsers, Consumers } from '/imports/api/collections';
+import { ProvidersStatus, ParsersStatus, ConsumersStatus, ConnectorsStatus } from '/imports/api/collections';
 //import './serviceConnector';
 import './publications';
 

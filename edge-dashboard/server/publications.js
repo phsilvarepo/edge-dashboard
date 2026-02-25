@@ -1,14 +1,18 @@
 import { Meteor } from 'meteor/meteor';
-import { Providers, Parsers, Consumers } from '/imports/api/collections';
+import { ProvidersStatus, ParsersStatus, ConsumersStatus, ConnectorsStatus } from '/imports/api/collections';
 
-Meteor.publish('providers', function () {
-  return Providers.find();
+Meteor.publish('providers_status', function () {
+  return ProvidersStatus.find();
 });
 
-Meteor.publish('parsers', function () {
-  return Parsers.find();
+Meteor.publish('parsers_status', function () {
+  return ParsersStatus.find();
 });
 
-Meteor.publish('consumers', function () {
-  return Consumers.find();
+Meteor.publish('consumers_status', function () {
+  return ConsumersStatus.find();
+});
+
+Meteor.publish('connectors_status', function () {
+  return ConnectorsStatus.find();
 });
