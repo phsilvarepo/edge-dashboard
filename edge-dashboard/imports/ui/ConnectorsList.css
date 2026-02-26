@@ -45,10 +45,7 @@
 /* Modal Styling */
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0, 0, 0, 0.85);
   display: flex;
   justify-content: center;
@@ -69,43 +66,49 @@
 
 .modal-close {
   position: absolute;
-  top: 15px;
-  right: 15px;
+  top: 15px; right: 15px;
   background: transparent;
   border: none;
   color: var(--text-dim);
   font-size: 24px;
   cursor: pointer;
-  z-index: 10;
 }
 
-.modal-close:hover {
-  color: white;
+/* Red Delete Action Styles */
+.delete-group {
+  display: flex;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #6e2121; /* Dark red border */
 }
-
-/* ConnectorsList.css additions */
 
 .btn-action {
-  background: #21262d;
-  color: #c9d1d9;
+  background: #3e1a1a; /* Dark wine background */
+  color: #ff9999;
   border: none;
-  padding: 8px 12px;
+  padding: 8px 14px;
   cursor: pointer;
   font-size: 11px;
   font-weight: bold;
+  transition: all 0.2s;
 }
 
-.btn-danger {
-  background: #da3633 !important;
+.btn-action:hover {
+  background: #5a1d1d;
+  color: white;
+}
+
+.btn-action.btn-danger {
+  background: #da3633 !important; /* Bright active red */
   color: white;
 }
 
 .btn-expand {
-  background: #30363d;
-  color: #8b949e;
+  background: #2a1414;
+  color: #ff9999;
   border: none;
-  border-left: 1px solid #21262d;
-  padding: 0 8px;
+  border-left: 1px solid #6e2121;
+  padding: 0 10px;
   cursor: pointer;
 }
 
@@ -118,46 +121,48 @@
   font-size: 11px;
   font-weight: bold;
   cursor: pointer;
-  animation: fadeIn 0.2s;
 }
 
 .bulk-dropdown {
   position: absolute;
-  top: 40px;
+  top: 45px;
   left: 0;
-  background: #161b22;
-  border: 1px solid #f85149;
+  background: #0d1117;
+  border: 1px solid #da3633;
   border-radius: 6px;
   z-index: 100;
-  min-width: 120px;
+  min-width: 180px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  overflow: hidden;
 }
 
 .dropdown-item {
   width: 100%;
-  padding: 10px;
+  padding: 12px;
   background: transparent;
   border: none;
-  color: white;
+  color: #ff9999;
   text-align: left;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: bold;
 }
 
-.dropdown-item.danger:hover {
+.dropdown-item:hover {
   background: #da3633;
+  color: white;
 }
 
-/* Selection Mode */
+/* Selection State on Cards */
 .status-card.selectable {
   cursor: pointer;
-  border-color: #442d2d;
+  border-style: dashed;
 }
 
 .status-card.selected {
   border-color: #f85149 !important;
-  background: rgba(248, 81, 73, 0.05);
+  background: rgba(248, 81, 73, 0.1);
+  transform: scale(0.98);
 }
 
 .selection-overlay {

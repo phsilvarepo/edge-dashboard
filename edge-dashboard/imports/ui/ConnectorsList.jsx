@@ -17,7 +17,6 @@ export default function ConnectorsList() {
     return Connectors.find().fetch();
   });
 
-  // Handlers
   const toggleSelect = (id) => {
     setSelectedIds(prev => 
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
@@ -25,9 +24,9 @@ export default function ConnectorsList() {
   };
 
   const handleDeleteSelected = () => {
-    if (selectedIds.length === 0) return alert("Select connectors to delete first.");
+    if (selectedIds.length === 0) return alert("Please select specific connectors to delete.");
     
-    if (confirm(`Are you sure you want to delete ${selectedIds.length} connector(s)?`)) {
+    if (confirm(`Confirm: Purge ${selectedIds.length} selected connection(s)?`)) {
       selectedIds.forEach(id => {
         Meteor.call('connectors.remove', id);
       });
@@ -37,7 +36,7 @@ export default function ConnectorsList() {
   };
 
   const handleDeleteAll = () => {
-    if (confirm("⚠️ CRITICAL ACTION: Are you sure you want to delete ALL connectors? This cannot be undone.")) {
+    if (confirm("⚠️ CRITICAL WARNING: This will permanently delete ALL connections. Proceed?")) {
       Meteor.call('connectors.removeAll');
       setShowBulkMenu(false);
     }
@@ -50,13 +49,14 @@ export default function ConnectorsList() {
         
         <div className="action-bar" style={{ display: 'flex', gap: '10px', alignItems: 'center', position: 'relative' }}>
           
-          {/* DELETE ACTIONS */}
-          <div className="delete-group" style={{ display: 'flex', borderRadius: '6px', overflow: 'hidden', border: '1px solid #442d2d' }}>
+          {/* RED ACTION GROUP */}
+          <div className="delete-group">
             <button 
               className={`btn-action ${isDeleteMode ? 'btn-danger' : ''}`}
               onClick={() => {
                 setDeleteMode(!isDeleteMode);
                 setSelectedIds([]);
+                setShowBulkMenu(false);
               }}
             >
               {isDeleteMode ? 'CANCEL' : 'DELETE CONNECTION'}
@@ -68,20 +68,24 @@ export default function ConnectorsList() {
 
             {showBulkMenu && (
               <div className="bulk-dropdown">
-                <button onClick={handleDeleteAll} className="dropdown-item danger">DELETE ALL CONNECTIONS</button>
+                <button onClick={handleDeleteAll} className="dropdown-item">
+                  DELETE ALL CONNECTIONS
+                </button>
               </div>
             )}
           </div>
 
-          {isDeleteMode && (
+          {isDeleteMode && selectedIds.length > 0 && (
             <button className="btn-confirm-delete" onClick={handleDeleteSelected}>
-              CONFIRM ({selectedIds.length})
+              CONFIRM PURGE ({selectedIds.length})
             </button>
           )}
 
-          <button className="btn-add-main" onClick={() => setModalOpen(true)}>
-            + NEW CONNECTION
-          </button>
+          {!isDeleteMode && (
+            <button className="btn-add-main" onClick={() => setModalOpen(true)}>
+              + NEW CONNECTION
+            </button>
+          )}
         </div>
       </div>
 
@@ -91,6 +95,7 @@ export default function ConnectorsList() {
             className={`status-card ${isDeleteMode ? 'selectable' : ''} ${selectedIds.includes(c._id) ? 'selected' : ''}`} 
             key={c._id}
             onClick={() => isDeleteMode && toggleSelect(c._id)}
+            style={{ position: 'relative' }}
           >
             {isDeleteMode && (
               <div className="selection-overlay">
@@ -99,7 +104,7 @@ export default function ConnectorsList() {
             )}
             
             <div className="status-header">
-              <h4 style={{ color: '#58a6ff' }}>{c.id}</h4>
+              <h4 style={{ color: '#58a6ff', fontFamily: 'monospace' }}>{c.id}</h4>
               <div className={`pulse-dot ${c.enabled !== false ? 'active' : ''}`}></div>
             </div>
 
@@ -109,6 +114,15 @@ export default function ConnectorsList() {
               <div className="flow-node">{c.parser}</div>
               <div className="flow-arrow">→</div>
               <div className="flow-node">{c.consumers?.length || 0} Sinks</div>
+            </div>
+
+            <div className="status-meta">
+              <div className="meta-item">
+                <span>STATE</span>
+                <span style={{ color: c.enabled !== false ? '#3fb950' : '#8b949e' }}>
+                  {c.enabled !== false ? 'OPERATIONAL' : 'OFFLINE'}
+                </span>
+              </div>
             </div>
           </div>
         ))}
