@@ -1,0 +1,83 @@
+/* imports/ui/AddConnector.css */
+
+.connector-form-container {
+  background-color: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 20px;
+  color: #c9d1d9;
+}
+
+.form-header h3 {
+  margin-top: 0;
+  color: #58a6ff;
+  font-size: 14px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border-bottom: 1px solid #30363d;
+  padding-bottom: 10px;
+}
+
+.input-group {
+  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+}
+
+.input-group label {
+  font-size: 11px;
+  color: #8b949e;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.tech-input, .tech-select {
+  background-color: #0d1117;
+  border: 1px solid #30363d;
+  color: #ffffff;
+  padding: 8px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.tech-input:focus {
+  border-color: #58a6ff;
+  outline: none;
+}
+
+.checkbox-list {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  padding: 10px;
+  border-radius: 4px;
+}
+
+.tech-checkbox-label {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 5px;
+  cursor: pointer;
+}
+
+.btn-create {
+  background-color: #238636;
+  color: white;
+  border: none;
+  padding: 10px;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+  width: 100%;
+}
+
+.btn-create:disabled {
+  background-color: #21262d;
+  color: #484f58;
+  cursor: not-allowed;
+}
+
+.loading-text {
+  color: #58a6ff;
+  font-family: monospace;
+  padding: 20px;
+}

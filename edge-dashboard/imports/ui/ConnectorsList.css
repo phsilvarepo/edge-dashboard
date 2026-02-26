@@ -1,0 +1,167 @@
+/* imports/ui/ConnectorsList.css */
+
+.btn-add-main {
+  background: var(--accent-green);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 12px;
+  transition: filter 0.2s;
+}
+
+.btn-add-main:hover {
+  filter: brightness(1.2);
+}
+
+/* Connector Flow Visual */
+.connector-flow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(0,0,0,0.2);
+  padding: 10px;
+  border-radius: 4px;
+  margin: 10px 0;
+  font-family: monospace;
+  font-size: 11px;
+}
+
+.flow-node {
+  color: var(--text-main);
+  background: var(--bg-dark);
+  padding: 2px 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+}
+
+.flow-arrow {
+  color: var(--accent-blue);
+  font-weight: bold;
+}
+
+/* Modal Styling */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: var(--bg-panel);
+  width: 100%;
+  max-width: 500px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  position: relative;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+}
+
+.modal-close {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 24px;
+  cursor: pointer;
+  z-index: 10;
+}
+
+.modal-close:hover {
+  color: white;
+}
+
+/* ConnectorsList.css additions */
+
+.btn-action {
+  background: #21262d;
+  color: #c9d1d9;
+  border: none;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.btn-danger {
+  background: #da3633 !important;
+  color: white;
+}
+
+.btn-expand {
+  background: #30363d;
+  color: #8b949e;
+  border: none;
+  border-left: 1px solid #21262d;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.btn-confirm-delete {
+  background: #f85149;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
+  animation: fadeIn 0.2s;
+}
+
+.bulk-dropdown {
+  position: absolute;
+  top: 40px;
+  left: 0;
+  background: #161b22;
+  border: 1px solid #f85149;
+  border-radius: 6px;
+  z-index: 100;
+  min-width: 120px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+
+.dropdown-item {
+  width: 100%;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  color: white;
+  text-align: left;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.dropdown-item.danger:hover {
+  background: #da3633;
+}
+
+/* Selection Mode */
+.status-card.selectable {
+  cursor: pointer;
+  border-color: #442d2d;
+}
+
+.status-card.selected {
+  border-color: #f85149 !important;
+  background: rgba(248, 81, 73, 0.05);
+}
+
+.selection-overlay {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
