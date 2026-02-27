@@ -1,14 +1,19 @@
 import React from 'react';
 import { Meteor } from 'meteor/meteor';
 import { useTracker } from 'meteor/react-meteor-data';
-import { ProvidersStatus } from '/imports/api/collections';
+import { ProvidersStatus, ComponentDefinitions } from '/imports/api/collections';
 import './Tabs.css';
 
 export default function ProvidersTab() {
-  const providers = useTracker(() => {
-    const sub = Meteor.subscribe('providers_status');
-    // Using the same return pattern for consistency
-    return ProvidersStatus.find().fetch();
+  const { providers, definitions, isLoading } = useTracker(() => {
+    const sub1 = Meteor.subscribe('providers_status');
+    const sub2 = Meteor.subscribe('component_definitions');
+    
+    return {
+      providers: ProvidersStatus.find().fetch(),
+      definitions: ComponentDefinitions.find({ type: 'provider' }).fetch(),
+      isLoading: !sub1.ready() || !sub2.ready(),
+    };
   });
 
   const isOnline = (lastRun) => {
@@ -17,21 +22,37 @@ export default function ProvidersTab() {
     return lastRun >= threshold;
   };
 
+  // Helper to find the friendly label
+  const getLabel = (providerName) => {
+    const def = definitions.find(d => d.name === providerName);
+    return def ? def.label : providerName; 
+  };
+
+  if (isLoading) return <div className="loading-text">LINKING PROVIDER DATA...</div>;
+
   return (
     <div className="tab-container">
       <div className="section-header">
-        <h2>INGRESS NODES <span className="text-dim">(PROVIDERS)</span></h2>
+        <h2>DATA PROVIDERS</h2>
       </div>
 
       <div className="status-grid">
         {providers.map(p => {
           const active = isOnline(p.lastRun);
+          // Look up the label using the provider name (e.g., 'distanceSensor' -> 'Distance Sensor')
+          const displayLabel = getLabel(p.provider || p.id);
 
           return (
             <div className="status-card" key={p._id}>
               <div className="status-header">
-                {/* Monospace style for the Node ID */}
-                <h4 style={{ color: '#58a6ff' }}>{p.id.toUpperCase()}</h4>
+                {/* Now using displayLabel with proper letter spacing for clarity */}
+                <h4 style={{ 
+                  color: '#58a6ff', 
+                  textTransform: 'uppercase', 
+                  letterSpacing: '1px' 
+                }}>
+                  {displayLabel}
+                </h4>
                 <div className={`pulse-dot ${active ? 'active' : ''}`}></div>
               </div>
 

@@ -24,6 +24,48 @@ const seedDefinitions = async () => {
     },
     {
       type: 'provider',
+      name: 'humiditySensor',
+      label: 'Humidity Sensor',
+      outputs: ['simple_json'],
+      parameters: []
+    },
+    {
+      type: 'provider',
+      name: 'lightSensor',
+      label: 'Light Sensor',
+      outputs: ['simple_json'],
+      parameters: []
+    },
+    {
+      type: 'provider',
+      name: 'soundSensor',
+      label: 'Sound Sensor',
+      outputs: ['simple_json'],
+      parameters: []
+    },
+    {
+      type: 'provider',
+      name: 'distanceSensor',
+      label: 'Distance Sensor',
+      outputs: ['simple_json'],
+      parameters: []
+    },
+    {
+      type: 'provider',
+      name: 'SPLBoard',
+      label: 'SPL Sensor Board',
+      outputs: ['simple_json'],
+      parameters: []
+    },
+    {
+      type: 'provider',
+      name: 'mqtt_provider',
+      label: 'MQTT Broker',
+      outputs: ['simple_json'],
+      parameters: []
+    },
+    /*{
+      type: 'provider',
       name: 'mqtt_provider',
       label: 'MQTT Broker',
       outputs: ['raw_json'],
@@ -33,11 +75,27 @@ const seedDefinitions = async () => {
         { name: 'username', type: 'text', label: 'Username' },
         { name: 'password', type: 'password', label: 'Password' }
       ]
-    },
+    },*/
     {
       type: 'parser',
       name: 'passthrough',
       label: 'Passthrough (No Change)',
+      inputs: ['simple_json', 'raw_json'],
+      outputs: ['processed_data'],
+      parameters: []
+    },
+    {
+      type: 'parser',
+      name: 'filter_json',
+      label: 'Filter JSON',
+      inputs: ['simple_json', 'raw_json'],
+      outputs: ['processed_data'],
+      parameters: []
+    },
+    {
+      type: 'parser',
+      name: 'filter_csv',
+      label: 'Filter CSV',
       inputs: ['simple_json', 'raw_json'],
       outputs: ['processed_data'],
       parameters: []
