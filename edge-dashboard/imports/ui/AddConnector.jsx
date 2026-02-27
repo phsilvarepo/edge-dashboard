@@ -1,19 +1,19 @@
 import React, { useState } from 'react';
 import { Meteor } from 'meteor/meteor';
 import { useTracker } from 'meteor/react-meteor-data';
-import { ComponentDefinitions, Connectors } from '/imports/api/collections'; // Added Connectors
+import { ComponentDefinitions, Connectors } from '/imports/api/collections';
 import './AddConnectorUI.css'; 
 
 export default function AddConnector({ onComplete }) {
   const [id, setId] = useState('');
-  const [error, setError] = useState(''); // New state for validation errors
+  const [error, setError] = useState('');
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [selectedParser, setSelectedParser] = useState(null);
   const [selectedConsumers, setSelectedConsumers] = useState([]);
 
   const { definitions, existingConnectors, isLoading } = useTracker(() => {
     const handle1 = Meteor.subscribe('component_definitions');
-    const handle2 = Meteor.subscribe('connectors'); // Subscribe to check for duplicates
+    const handle2 = Meteor.subscribe('connectors');
     return {
       definitions: ComponentDefinitions.find().fetch(),
       existingConnectors: Connectors.find().fetch(),
@@ -31,21 +31,12 @@ export default function AddConnector({ onComplete }) {
     d.type === 'consumer' && selectedParser?.outputs.some(out => d.inputs.includes(out))
   );
 
-  // Validation Logic
   const handleIdChange = (e) => {
     const rawValue = e.target.value.toUpperCase();
-    // 1. Limit to 24 chars. 2. Only allow A-Z, 0-9, and _
     const filteredValue = rawValue.substring(0, 24).replace(/[^A-Z0-9_]/g, '');
-    
     setId(filteredValue);
-
-    // 3. Check for duplicates
     const isDuplicate = existingConnectors.some(c => c.id === filteredValue);
-    if (isDuplicate) {
-      setError('NAME ALREADY IN USE');
-    } else {
-      setError('');
-    }
+    setError(isDuplicate ? 'NAME ALREADY IN USE' : '');
   };
 
   const isPipelineValid = id && !error && selectedProvider && selectedParser && selectedConsumers.length > 0;
@@ -53,7 +44,6 @@ export default function AddConnector({ onComplete }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!isPipelineValid) return;
-
     Meteor.call('connectors.insert', {
       id,
       provider: selectedProvider.name,
@@ -71,7 +61,6 @@ export default function AddConnector({ onComplete }) {
       </div>
 
       <form onSubmit={handleSubmit}>
-        {/* IDENTITY */}
         <div className={`form-step-wrapper ${id && !error ? 'active' : ''}`}>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
              <label className="input-label">Node Identity</label>
@@ -80,14 +69,13 @@ export default function AddConnector({ onComplete }) {
           <input 
             className="tech-input"
             style={error ? { borderColor: '#f85149', color: '#f85149' } : {}}
-            placeholder="Define the name of the pipeline" 
+            placeholder="Define the name" 
             value={id} 
             onChange={handleIdChange} 
             required
           />
         </div>
 
-        {/* PROVIDER */}
         <div className={`form-step-wrapper ${selectedProvider ? 'active' : ''}`}>
           <label className="input-label">1. Data Source</label>
           <select 
@@ -99,37 +87,36 @@ export default function AddConnector({ onComplete }) {
               setSelectedParser(null);
               setSelectedConsumers([]);
             }}
+            required
           >
             <option value="">Select provider</option>
             {providers.map(p => <option key={p.name} value={p.name}>{p.label}</option>)}
           </select>
         </div>
 
-        {/* PARSER */}
         <div className={`form-step-wrapper ${selectedParser ? 'active' : ''}`}>
           <label className="input-label">2. Logic Engine</label>
-          <select 
-            className="tech-select"
-            disabled={!selectedProvider} 
-            value={selectedParser?.name || ''}
-            onChange={e => {
-              const p = availableParsers.find(x => x.name === e.target.value);
-              setSelectedParser(p);
-              setSelectedConsumers([]);
-            }}
-          >
-            {!selectedProvider ? (
-              <option value="">Waiting for source selection...</option>
-            ) : (
-              <>
-                <option value="">Select parser</option>
-                {availableParsers.map(p => <option key={p.name} value={p.name}>{p.label}</option>)}
-              </>
-            )}
-          </select>
+          {!selectedProvider ? (
+            <div className="tech-input-placeholder-box">
+              Waiting for source selection...
+            </div>
+          ) : (
+            <select 
+              className="tech-select"
+              value={selectedParser?.name || ''}
+              onChange={e => {
+                const p = availableParsers.find(x => x.name === e.target.value);
+                setSelectedParser(p);
+                setSelectedConsumers([]);
+              }}
+              required
+            >
+              <option value="">Select parser</option>
+              {availableParsers.map(p => <option key={p.name} value={p.name}>{p.label}</option>)}
+            </select>
+          )}
         </div>
 
-        {/* CONSUMERS */}
         <div className={`form-step-wrapper ${selectedConsumers.length > 0 ? 'active' : ''}`}>
           <label className="input-label">3. Target Sinks</label>
           <div className="checkbox-list">
@@ -163,12 +150,7 @@ export default function AddConnector({ onComplete }) {
               {error ? 'Fix naming conflict to proceed.' : 'Complete all configuration steps to deploy.'}
             </div>
           )}
-          
-          <button 
-            className="btn-create" 
-            type="submit" 
-            disabled={!isPipelineValid}
-          >
+          <button className="btn-create" type="submit" disabled={!isPipelineValid}>
             Deploy Pipeline
           </button>
         </div>

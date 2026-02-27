@@ -15,6 +15,16 @@ const seedDefinitions = async () => {
   }
 
   const definitions = [
+    /*{
+      type: 'provider_template',
+      name: 'random',
+      label: 'Random Number Generator',
+      outputs: ['simple_json'],
+      values: [
+        readings: 12123,
+        unit: Celsius,
+      ]
+    },*/
     {
       type: 'provider',
       name: 'random',

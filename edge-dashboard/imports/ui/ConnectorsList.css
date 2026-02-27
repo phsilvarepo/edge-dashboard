@@ -159,16 +159,12 @@
   border-style: dashed;
 }
 
+/* When selected, we switch from dashed to solid and apply the red color */
 .status-card.selected {
+  border-style: solid !important; /* Forces the line to be full/solid */
   border-color: #f85149 !important;
   background: rgba(248, 81, 73, 0.1);
   transform: scale(0.98);
-}
-
-.selection-overlay {
-  position: absolute;
-  top: 10px;
-  right: 10px;
 }
 
 /* ADDED: Empty State Positioning */
@@ -192,4 +188,16 @@
   font-weight: 500;
   font-size: 18px;
   margin: 0;
+}
+
+/* Hide the pulse dot in delete mode */
+.status-card.selectable .pulse-dot {
+  display: none !important;
+}
+
+.selection-overlay {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
 }
