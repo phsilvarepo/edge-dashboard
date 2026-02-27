@@ -1,15 +1,14 @@
 import { Meteor } from 'meteor/meteor';
+import { check } from 'meteor/check'; // Fix 1: Add this import
 import { Connectors } from './collections';
 
 Meteor.methods({
-  // Add the 'async' keyword here
   async 'connectors.insert'(connector) {
-
+    // Basic validation
     if (!connector.id) {
       throw new Meteor.Error('invalid-id', 'Connector ID is required');
     }
 
-    // Use insertAsync and await the result
     return await Connectors.insertAsync({
       id: connector.id,
       provider: connector.provider,
@@ -19,12 +18,16 @@ Meteor.methods({
       createdAt: new Date()
     });
   },
-  'connectors.remove'(id) {
-    check(id, String);
-    Connectors.remove(id);
+
+  // Fix 2: Make this async and use removeAsync
+  async 'connectors.remove'(id) {
+    check(id, String); 
+    return await Connectors.removeAsync(id);
   },
-  'connectors.removeAll'() {
-    // Optional: add a check for admin permissions here
-    Connectors.remove({});
+
+  // Fix 3: Make this async and use removeAsync
+  async 'connectors.removeAll'() {
+    // Security note: In a real app, check Meteor.userId() here
+    return await Connectors.removeAsync({});
   }
 });

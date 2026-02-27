@@ -17,6 +17,8 @@ export default function ConnectorsList() {
     return Connectors.find().fetch();
   });
 
+  const hasConnectors = connectors.length > 0;
+
   const toggleSelect = (id) => {
     setSelectedIds(prev => 
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
@@ -39,6 +41,7 @@ export default function ConnectorsList() {
     if (confirm("⚠️ CRITICAL WARNING: This will permanently delete ALL connections. Proceed?")) {
       Meteor.call('connectors.removeAll');
       setShowBulkMenu(false);
+      setDeleteMode(false);
     }
   };
 
@@ -47,86 +50,99 @@ export default function ConnectorsList() {
       <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h2>ACTIVE PIPELINES <span className="text-dim">({connectors.length})</span></h2>
         
-        <div className="action-bar" style={{ display: 'flex', gap: '10px', alignItems: 'center', position: 'relative' }}>
-          
-          {/* RED ACTION GROUP */}
-          <div className="delete-group">
-            <button 
-              className={`btn-action ${isDeleteMode ? 'btn-danger' : ''}`}
-              onClick={() => {
-                setDeleteMode(!isDeleteMode);
-                setSelectedIds([]);
-                setShowBulkMenu(false);
-              }}
+        {/* Only show top action bar if connectors exist */}
+        {hasConnectors && (
+          <div className="action-bar" style={{ display: 'flex', gap: '10px', alignItems: 'center', position: 'relative' }}>
+            <div className="delete-group">
+              <button 
+                className={`btn-action ${isDeleteMode ? 'btn-danger' : ''}`}
+                onClick={() => {
+                  setDeleteMode(!isDeleteMode);
+                  setSelectedIds([]);
+                  setShowBulkMenu(false);
+                }}
+              >
+                {isDeleteMode ? 'CANCEL' : 'DELETE CONNECTION'}
+              </button>
+              
+              <button className="btn-expand" onClick={() => setShowBulkMenu(!showBulkMenu)}>
+                {showBulkMenu ? '▲' : '▼'}
+              </button>
+
+              {showBulkMenu && (
+                <div className="bulk-dropdown">
+                  <button onClick={handleDeleteAll} className="dropdown-item">
+                    DELETE ALL CONNECTIONS
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {isDeleteMode && selectedIds.length > 0 && (
+              <button className="btn-confirm-delete" onClick={handleDeleteSelected}>
+                CONFIRM PURGE ({selectedIds.length})
+              </button>
+            )}
+
+            {!isDeleteMode && (
+              <button className="btn-add-main" onClick={() => setModalOpen(true)}>
+                + NEW CONNECTION
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {hasConnectors ? (
+        <div className="status-grid">
+          {connectors.map(c => (
+            <div 
+              className={`status-card ${isDeleteMode ? 'selectable' : ''} ${selectedIds.includes(c._id) ? 'selected' : ''}`} 
+              key={c._id}
+              onClick={() => isDeleteMode && toggleSelect(c._id)}
+              style={{ position: 'relative' }}
             >
-              {isDeleteMode ? 'CANCEL' : 'DELETE CONNECTION'}
-            </button>
-            
-            <button className="btn-expand" onClick={() => setShowBulkMenu(!showBulkMenu)}>
-              {showBulkMenu ? '▲' : '▼'}
-            </button>
-
-            {showBulkMenu && (
-              <div className="bulk-dropdown">
-                <button onClick={handleDeleteAll} className="dropdown-item">
-                  DELETE ALL CONNECTIONS
-                </button>
+              {isDeleteMode && (
+                <div className="selection-overlay">
+                  <input type="checkbox" checked={selectedIds.includes(c._id)} readOnly />
+                </div>
+              )}
+              
+              <div className="status-header">
+                <h4 style={{ color: '#58a6ff', fontFamily: 'monospace' }}>{c.id}</h4>
+                <div className={`pulse-dot ${c.enabled !== false ? 'active' : ''}`}></div>
               </div>
-            )}
-          </div>
 
-          {isDeleteMode && selectedIds.length > 0 && (
-            <button className="btn-confirm-delete" onClick={handleDeleteSelected}>
-              CONFIRM PURGE ({selectedIds.length})
-            </button>
-          )}
+              <div className="connector-flow">
+                <div className="flow-node">{c.provider}</div>
+                <div className="flow-arrow">→</div>
+                <div className="flow-node">{c.parser}</div>
+                <div className="flow-arrow">→</div>
+                <div className="flow-node">{c.consumers?.length || 0} Sinks</div>
+              </div>
 
-          {!isDeleteMode && (
-            <button className="btn-add-main" onClick={() => setModalOpen(true)}>
-              + NEW CONNECTION
-            </button>
-          )}
+              <div className="status-meta">
+                <div className="meta-item">
+                  <span>STATE</span>
+                  <span style={{ color: c.enabled !== false ? '#3fb950' : '#8b949e' }}>
+                    {c.enabled !== false ? 'OPERATIONAL' : 'OFFLINE'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
-      </div>
-
-      <div className="status-grid">
-        {connectors.map(c => (
-          <div 
-            className={`status-card ${isDeleteMode ? 'selectable' : ''} ${selectedIds.includes(c._id) ? 'selected' : ''}`} 
-            key={c._id}
-            onClick={() => isDeleteMode && toggleSelect(c._id)}
-            style={{ position: 'relative' }}
-          >
-            {isDeleteMode && (
-              <div className="selection-overlay">
-                <input type="checkbox" checked={selectedIds.includes(c._id)} readOnly />
-              </div>
-            )}
-            
-            <div className="status-header">
-              <h4 style={{ color: '#58a6ff', fontFamily: 'monospace' }}>{c.id}</h4>
-              <div className={`pulse-dot ${c.enabled !== false ? 'active' : ''}`}></div>
-            </div>
-
-            <div className="connector-flow">
-              <div className="flow-node">{c.provider}</div>
-              <div className="flow-arrow">→</div>
-              <div className="flow-node">{c.parser}</div>
-              <div className="flow-arrow">→</div>
-              <div className="flow-node">{c.consumers?.length || 0} Sinks</div>
-            </div>
-
-            <div className="status-meta">
-              <div className="meta-item">
-                <span>STATE</span>
-                <span style={{ color: c.enabled !== false ? '#3fb950' : '#8b949e' }}>
-                  {c.enabled !== false ? 'OPERATIONAL' : 'OFFLINE'}
-                </span>
-              </div>
-            </div>
+      ) : (
+        /* Empty State */
+        <div className="empty-state-full">
+          <div className="empty-state-content">
+            <h3>There are no active/saved connectors</h3>
+            <button className="btn-add-main" style={{ marginTop: '20px', padding: '12px 24px' }} onClick={() => setModalOpen(true)}>
+              START FIRST CONNECTION
+            </button>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
 
       {isModalOpen && (
         <div className="modal-overlay" onClick={() => setModalOpen(false)}>

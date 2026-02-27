@@ -170,3 +170,26 @@
   top: 10px;
   right: 10px;
 }
+
+/* ADDED: Empty State Positioning */
+.empty-state-full {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  min-height: 400px;
+  width: 100%;
+  text-align: center;
+  /* Added delineation styles below */
+  border: 2px dashed #30363d; 
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.1);
+  margin-top: 20px;
+}
+
+.empty-state-content h3 {
+  color: var(--text-dim);
+  font-weight: 500;
+  font-size: 18px;
+  margin: 0;
+}
