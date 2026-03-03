@@ -3,32 +3,45 @@ import { check, Match } from 'meteor/check';
 import mqtt from 'mqtt';
 import { Connectors, ProvidersStatus } from './collections';
 
-// 1. Keep the client outside the method so it persists
 let globalMqttClient = null;
 
+// Returns documentation if known, otherwise returns the Llama placeholder
 const getDocsLink = (driver) => {
   const links = {
     'ADS1115': 'https://tasmota.github.io/docs/ADS1115/',
     'SR04': 'https://tasmota.github.io/docs/HC-SR04/',
     'SCD40': 'https://tasmota.github.io/docs/SCD40/',
+    'SCD30': 'https://tasmota.github.io/docs/SCD30/',
+    'BME280': 'https://tasmota.github.io/docs/BME280/',
     'ANALOG': 'https://tasmota.github.io/docs/ADC/',
     'BATTERY': 'https://tasmota.github.io/docs/Power-Monitoring-Calibration/'
   };
-  return links[driver] || 'https://tasmota.github.io/docs/Peripherals/';
+  
+  // Placeholder for any dynamic sensor not in the list above
+  return links[driver] || 'https://www.llama.com/docs/placeholder'; 
 };
 
-// Helper function to handle the incoming messages
 const handleMqttMessage = (topic, message) => {
+  // STRICT FILTER: Only process topics that start with HS4U/tele/ AND end with /SENSOR
+  if (!topic.startsWith('HS4U/tele/') || !topic.endsWith('/SENSOR')) return;
+
   try {
     const data = JSON.parse(message.toString());
     const parts = topic.split('/');
+    
     const idPart = parts.find(p => p.includes('tasmota') || p.length > 10) || 'unknown';
     const shortId = idPart.replace('tasmota_', '').slice(-6).toUpperCase();
-    const drivers = ['ADS1115', 'SR04', 'SCD40', 'SCD30', 'BME280', 'ANALOG', 'BATTERY'];
+
     const searchArea = data.sn ? { ...data.sn, ...data } : data;
 
+    // Keys to ignore because they aren't sensors
+    const ignoreKeys = ['Time', 'TempUnit', 'Uptime', 'Heap', 'SleepMode', 'Sleep', 'LoadAvg', 'MqttCount', 'Berry'];
+
     Object.keys(searchArea).forEach(async (key) => {
-      if (drivers.includes(key)) {
+      // 1. Filter out metadata and ensure value is an object (Tasmota sensors are objects)
+      if (!ignoreKeys.includes(key) && typeof searchArea[key] === 'object' && searchArea[key] !== null) {
+        
+        const docLink = getDocsLink(key);
         const uniqueId = `${shortId}_${key}`.toUpperCase();
         const sensorValue = searchArea[key];
 
@@ -43,7 +56,7 @@ const handleMqttMessage = (topic, message) => {
                 lastRun: new Date(),
                 latestData: sensorValue,
                 parentId: shortId,
-                docs: getDocsLink(key)
+                docs: docLink
               }
             }
           );
@@ -56,7 +69,6 @@ const handleMqttMessage = (topic, message) => {
 };
 
 Meteor.methods({
-  // --- CONNECTOR MANAGEMENT ---
   async 'connectors.insert'(connector) {
     check(connector, Object);
     if (!connector.id) throw new Meteor.Error('invalid-id', 'ID required');
@@ -72,7 +84,6 @@ Meteor.methods({
     return await Connectors.removeAsync({});
   },
 
-  // --- PERSISTENT AUTO-DISCOVERY WITH VERIFICATION ---
   'providers.autoDiscover'(config) {
     check(config, {
       brokerUrl: String,
@@ -83,19 +94,16 @@ Meteor.methods({
     if (Meteor.isClient) return;
 
     return new Promise((resolve) => {
-      // 1. Detect if the address is actually different from the current connection
       const currentUrl = globalMqttClient?.options?.href || "";
       const isDifferentAddress = !currentUrl.includes(config.brokerUrl);
 
-      // 2. If already connected to the SAME address, just poke and return success
       if (globalMqttClient && globalMqttClient.connected && !isDifferentAddress) {
-        console.log("📡 Already connected to this broker. Re-poking...");
-        globalMqttClient.publish('tasmota/cmnd/backlog', 'Status 8');
-        globalMqttClient.publish('cmnd/tasmota/Status', '8');
+        // Updated poke topics for HS4U structure
+        globalMqttClient.publish('HS4U/cmnd/tasmota/backlog', 'Status 8');
+        globalMqttClient.publish('HS4U/cmnd/tasmota/Status', '8');
         return resolve(true);
       }
 
-      // 3. If address is different OR we are disconnected, we must perform a fresh test
       const mqttOptions = {
         username: config.username || '',
         password: config.password || '',
@@ -103,9 +111,7 @@ Meteor.methods({
         reconnectPeriod: 10000, 
       };
 
-      // Force close existing client so the new (potentially wrong) address can be tested fairly
       if (globalMqttClient) {
-        console.log("🔄 Changing broker. Closing previous connection...");
         globalMqttClient.end(true); 
         globalMqttClient = null;
       }
@@ -119,9 +125,13 @@ Meteor.methods({
         console.log("✅ MQTT Connected & Verified.");
         
         globalMqttClient = tempClient;
-        globalMqttClient.subscribe('#');
-        globalMqttClient.publish('tasmota/cmnd/backlog', 'Status 8');
-        globalMqttClient.publish('cmnd/tasmota/Status', '8');
+        
+        // Only subscribe to the HS4U telemetry directory
+        globalMqttClient.subscribe('HS4U/tele/#');
+        
+        // Send discovery commands via HS4U path
+        globalMqttClient.publish('HS4U/cmnd/tasmota/backlog', 'Status 8');
+        globalMqttClient.publish('HS4U/cmnd/tasmota/Status', '8');
 
         globalMqttClient.on('message', (topic, message) => {
           handleMqttMessage(topic, message);
@@ -133,16 +143,13 @@ Meteor.methods({
       tempClient.on('error', (err) => {
         if (isFinished) return;
         isFinished = true;
-        console.error("❌ MQTT Connection Failed:", err.message);
         tempClient.end(true);
         resolve(false);
       });
 
-      // Safety timeout for unresponsive IPs
       setTimeout(() => {
         if (isFinished) return;
         isFinished = true;
-        console.log("⚠️ MQTT Connection Timeout.");
         tempClient.end(true);
         resolve(false);
       }, 5500);
