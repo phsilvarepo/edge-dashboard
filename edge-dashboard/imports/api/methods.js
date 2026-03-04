@@ -1,87 +1,137 @@
 import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import mqtt from 'mqtt';
-import { Connectors, ProvidersStatus } from './collections';
+import { Connectors, ProvidersStatus, ProvidersTemplate } from './collections';
 
 let globalMqttClient = null;
 
-// Returns documentation if known, otherwise returns the Llama placeholder
-const getDocsLink = (driver) => {
-  const links = {
-    'ADS1115': 'https://tasmota.github.io/docs/ADS1115/',
-    'SR04': 'https://tasmota.github.io/docs/HC-SR04/',
-    'SCD40': 'https://tasmota.github.io/docs/SCD40/',
-    'SCD30': 'https://tasmota.github.io/docs/SCD30/',
-    'BME280': 'https://tasmota.github.io/docs/BME280/',
-    'ANALOG': 'https://tasmota.github.io/docs/ADC/',
-    'BATTERY': 'https://tasmota.github.io/docs/Power-Monitoring-Calibration/'
-  };
-  
-  // Placeholder for any dynamic sensor not in the list above
-  return links[driver] || 'https://www.llama.com/docs/placeholder'; 
-};
-
-const handleMqttMessage = (topic, message) => {
-  // STRICT FILTER: Only process topics that start with HS4U/tele/ AND end with /SENSOR
-  if (!topic.startsWith('HS4U/tele/') || !topic.endsWith('/SENSOR')) return;
-
+/**
+ * Logic to process incoming MQTT messages and match them against 
+ * Blueprints (Templates) for auto-discovery and live updates.
+ */
+const handleMqttMessage = async (topic, message) => {
   try {
-    const data = JSON.parse(message.toString());
-    const parts = topic.split('/');
+    const rawPayload = message.toString();
+    const payload = JSON.parse(rawPayload);
     
-    const idPart = parts.find(p => p.includes('tasmota') || p.length > 10) || 'unknown';
-    const shortId = idPart.replace('tasmota_', '').slice(-6).toUpperCase();
+    console.log(`\n📩 MQTT Received [${topic}]`);
 
-    const searchArea = data.sn ? { ...data.sn, ...data } : data;
+    // Determine Protocol Method based on Topic Structure
+    let detectedMethod = '';
+    let deviceId = 'UNKNOWN';
 
-    // Keys to ignore because they aren't sensors
-    const ignoreKeys = ['Time', 'TempUnit', 'Uptime', 'Heap', 'SleepMode', 'Sleep', 'LoadAvg', 'MqttCount', 'Berry'];
+    if (topic.startsWith('HS4U/tele/')) {
+      detectedMethod = 'MQTT_TASMOTA';
+      const parts = topic.split('/');
+      deviceId = parts[2] || 'TASMOTA_DEV';
+    } else if (topic.startsWith('shellies/')) {
+      detectedMethod = 'MQTT_SHELLY';
+      const parts = topic.split('/');
+      deviceId = parts[1] || 'SHELLY_DEV';
+    } else {
+      console.log(`⚠️ Ignored Topic: ${topic}`);
+      return; 
+    }
 
-    Object.keys(searchArea).forEach(async (key) => {
-      // 1. Filter out metadata and ensure value is an object (Tasmota sensors are objects)
-      if (!ignoreKeys.includes(key) && typeof searchArea[key] === 'object' && searchArea[key] !== null) {
-        
-        const docLink = getDocsLink(key);
-        const uniqueId = `${shortId}_${key}`.toUpperCase();
-        const sensorValue = searchArea[key];
+    const searchArea = payload.sn ? { ...payload.sn, ...payload } : payload;
+    const shortId = deviceId.replace('tasmota_', '').replace('shelly_', '').toUpperCase();
 
-        try {
-          await ProvidersStatus.upsertAsync(
-            { _id: uniqueId },
-            {
-              $set: {
-                id: uniqueId,
-                provider: key,
-                topic: topic,
-                lastRun: new Date(),
-                latestData: sensorValue,
-                parentId: shortId,
-                docs: docLink
-              }
-            }
-          );
-        } catch (dbErr) {
-          console.error(`❌ DB Error: ${dbErr.message}`);
+    // Check every key in the JSON
+    for (const key of Object.keys(searchArea)) {
+      // Skip metadata keys
+      if (['Time', 'TempUnit'].includes(key)) continue;
+
+      // Log the search
+      console.log(`🔍 Checking key: "${key}" for protocol: ${detectedMethod}`);
+
+      const template = await ProvidersTemplate.findOneAsync({ 
+        name: key,
+        $or: [
+          { captureMethod: detectedMethod },
+          { supportedMethods: detectedMethod }
+        ]
+      });
+
+      if (template) {
+        // Validation for Tasmota: must be a /SENSOR topic
+        if (detectedMethod === 'MQTT_TASMOTA' && !topic.endsWith('/SENSOR')) {
+          console.log(`⏭️ Key "${key}" found template, but skipped: Topic is not /SENSOR`);
+          continue;
         }
+        
+        const uniqueId = `${shortId}_${key}`.toUpperCase();
+        console.log(`✅ MATCH! Upserting Provider: ${uniqueId}`);
+
+        await ProvidersStatus.upsertAsync(
+          { _id: uniqueId },
+          {
+            $set: {
+              id: uniqueId,
+              templateId: template._id,
+              provider: key,
+              label: template.label,
+              captureMethod: detectedMethod,
+              topic: topic,
+              lastRun: new Date(),
+              latestData: JSON.stringify(searchArea[key]),
+              parentId: shortId,
+              docs: template.docs
+            }
+          }
+        );
+      } else {
+        console.log(`❌ No template found in DB for key: "${key}" with method: ${detectedMethod}`);
       }
-    });
-  } catch (e) { /* Not JSON */ }
+    }
+  } catch (e) { 
+    console.error("❌ MQTT Error:", e.message);
+  }
 };
 
 Meteor.methods({
-  async 'connectors.insert'(connector) {
-    check(connector, Object);
-    if (!connector.id) throw new Meteor.Error('invalid-id', 'ID required');
-    return await Connectors.insertAsync({ ...connector, enabled: true, createdAt: new Date() });
-  },
+  async 'providers.createInstance'({ templateId, method, params }) {
+    check(templateId, String);
+    check(method, String);
+    check(params, Object);
 
-  async 'connectors.remove'(id) {
-    check(id, String);
-    return await Connectors.removeAsync(id);
-  },
+    const template = await ProvidersTemplate.findOneAsync(templateId);
+    if (!template) throw new Meteor.Error('not-found', 'Blueprint not found');
 
-  async 'connectors.removeAll'() {
-    return await Connectors.removeAsync({});
+    let computedTopic = '';
+    let parentId = '';
+
+    if (method === 'MQTT_TASMOTA') {
+      computedTopic = `HS4U/tele/${params.topic}/SENSOR`;
+      parentId = params.topic.toUpperCase();
+    } else if (method === 'MQTT_SHELLY') {
+      computedTopic = `shellies/${params.deviceId}/status`;
+      parentId = params.deviceId.toUpperCase();
+    }
+
+    const instanceId = `${parentId}_${template.name}`.toUpperCase();
+
+    if (globalMqttClient && globalMqttClient.connected) {
+        globalMqttClient.subscribe(computedTopic);
+    }
+
+    return await ProvidersStatus.upsertAsync(
+      { _id: instanceId },
+      {
+        $set: {
+          id: instanceId,
+          templateId: template._id,
+          provider: template.name,
+          label: template.label,
+          captureMethod: method,
+          topic: computedTopic,
+          params: params,
+          lastRun: new Date(),
+          latestData: { status: "Linked, awaiting broadcast..." },
+          parentId: parentId,
+          docs: template.docs
+        }
+      }
+    );
   },
 
   'providers.autoDiscover'(config) {
@@ -98,9 +148,7 @@ Meteor.methods({
       const isDifferentAddress = !currentUrl.includes(config.brokerUrl);
 
       if (globalMqttClient && globalMqttClient.connected && !isDifferentAddress) {
-        // Updated poke topics for HS4U structure
         globalMqttClient.publish('HS4U/cmnd/tasmota/backlog', 'Status 8');
-        globalMqttClient.publish('HS4U/cmnd/tasmota/Status', '8');
         return resolve(true);
       }
 
@@ -122,25 +170,14 @@ Meteor.methods({
       tempClient.on('connect', () => {
         if (isFinished) return;
         isFinished = true;
-        console.log("✅ MQTT Connected & Verified.");
-        
         globalMqttClient = tempClient;
-        
-        // Only subscribe to the HS4U telemetry directory
-        globalMqttClient.subscribe('HS4U/tele/#');
-        
-        // Send discovery commands via HS4U path
+        globalMqttClient.subscribe(['HS4U/tele/#', 'shellies/#']);
         globalMqttClient.publish('HS4U/cmnd/tasmota/backlog', 'Status 8');
-        globalMqttClient.publish('HS4U/cmnd/tasmota/Status', '8');
-
-        globalMqttClient.on('message', (topic, message) => {
-          handleMqttMessage(topic, message);
-        });
-        
+        globalMqttClient.on('message', (topic, message) => { handleMqttMessage(topic, message); });
         resolve(true);
       });
 
-      tempClient.on('error', (err) => {
+      tempClient.on('error', () => {
         if (isFinished) return;
         isFinished = true;
         tempClient.end(true);
@@ -155,4 +192,32 @@ Meteor.methods({
       }, 5500);
     });
   },
+
+  async 'connectors.insert'(connector) {
+    check(connector, Object);
+    if (!connector.id) throw new Meteor.Error('invalid-id', 'ID required');
+    return await Connectors.insertAsync({ ...connector, enabled: true, createdAt: new Date() });
+  },
+
+  async 'connectors.remove'(id) {
+    check(id, String);
+    return await Connectors.removeAsync(id);
+  },
+
+  /**
+   * Remove a live provider instance
+   */
+  async 'providers.removeInstance'(instanceId) {
+    check(instanceId, String);
+    
+    // Optional: If you want to unsubscribe from MQTT when a provider is removed
+    // you would need to check if any other providers still use that topic.
+    // For now, we simply remove the record from the dashboard.
+    
+    return await ProvidersStatus.removeAsync(instanceId);
+  },
+
+  async 'connectors.removeAll'() {
+    return await Connectors.removeAsync({});
+  }
 });

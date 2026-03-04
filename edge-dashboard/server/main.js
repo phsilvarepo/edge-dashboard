@@ -3,6 +3,7 @@ import { Meteor } from 'meteor/meteor';
 import './publications';
 import '/imports/api/methods';
 import { ComponentDefinitions } from '/imports/api/collections';
+import { ProvidersTemplate } from '/imports/api/collections';
 
 // Define the function
 const seedDefinitions = async () => {
@@ -147,5 +148,93 @@ const seedDefinitions = async () => {
 
 Meteor.startup(async () => {
   console.log('Server starting...');
+  
+  // Seed general definitions
   await seedDefinitions();
+  
+  // Seed specific Provider Blueprints (Templates)
+  // Fix: Use countAsync() directly on the cursor
+  const templateCount = await ProvidersTemplate.find().countAsync();
+
+  if (templateCount === 0) {
+    console.log("🌱 Seeding ProvidersTemplate...");
+
+    // Inside your Meteor.startup block in server/main.js
+    // Inside your Meteor.startup block
+  
+    // server/main.js - inside Meteor.startup
+
+    const templates = [
+      {
+        name: 'ADS1115',
+        label: 'Precision ADC (ADS1115)',
+        docs: 'https://tasmota.github.io/docs/ADS1115/',
+        supportedMethods: ['MQTT_TASMOTA', 'MQTT_SHELLY'],
+        outputType: 'json',
+        description: '4-Channel 16-bit Analog to Digital Converter for high-accuracy voltage sensing.'
+      },
+      {
+        name: 'ANALOG',
+        label: 'Analog Input (A0/A1)',
+        docs: 'https://tasmota.github.io/docs/GPIO-Definitions/#analog-inputs',
+        supportedMethods: ['MQTT_TASMOTA', 'MQTT_SHELLY'],
+        outputType: 'json',
+        description: 'Generic analog voltage monitoring via onboard ADC pins.'
+      },
+      {
+        name: 'SR04',
+        label: 'Ultrasonic Distance (HC-SR04)',
+        docs: 'https://tasmota.github.io/docs/HC-SR04/',
+        supportedMethods: ['MQTT_TASMOTA'],
+        outputType: 'json',
+        description: 'Non-contact distance measurement using ultrasonic pulses.'
+      },
+      {
+        name: 'SEN5X',
+        label: 'Particulate Matter (SEN5x)',
+        docs: 'https://sensirion.com/products/catalog/SEN55/',
+        supportedMethods: ['MQTT_TASMOTA'],
+        outputType: 'json',
+        description: 'Environmental node for PM1, PM2.5, PM10, VOC, and NOx monitoring.'
+      },
+      {
+        name: 'LTR329',
+        label: 'Ambient Light (LTR-329)',
+        docs: 'https://tasmota.github.io/docs/LTR-303-329-390/',
+        supportedMethods: ['MQTT_TASMOTA'],
+        outputType: 'json',
+        description: 'High dynamic range digital light sensor for Visible and IR spectrum.'
+      },
+      {
+        name: 'SPL',
+        label: 'Sound Pressure Level (SPL)',
+        docs: 'https://tasmota.github.io/docs/Sound-Pressure-Level/',
+        supportedMethods: ['MQTT_TASMOTA'],
+        outputType: 'json',
+        description: 'Acoustic noise monitoring (LAEq, LASmax) for environment analysis.'
+      },
+      {
+        name: 'SCD40',
+        label: 'CO2 Sensor (SCD4x)',
+        docs: 'https://tasmota.github.io/docs/SCD40/',
+        supportedMethods: ['MQTT_TASMOTA'],
+        outputType: 'json',
+        description: 'True CO2, Temperature, and Humidity sensor using photoacoustic technology.'
+      },
+      {
+        name: 'SHELLY_UNI',
+        label: 'Shelly Uni System',
+        docs: 'https://shelly-api-docs.shelly.cloud/gen1/#shelly-uni',
+        supportedMethods: ['MQTT_SHELLY'],
+        outputType: 'json',
+        description: 'System-level telemetry for the Shelly Uni Smart Implant.'
+      }
+    ];
+
+    // Use upsert so it updates existing ones and adds new ones
+    for (const t of templates) {
+      await ProvidersTemplate.upsertAsync({ name: t.name }, { $set: t });
+    }
+    console.log("✅ Provider Blueprints synchronized.");
+  }
 });

@@ -1,5 +1,5 @@
 import { Meteor } from 'meteor/meteor';
-import { ProvidersStatus, ParsersStatus, ConsumersStatus, ConnectorsStatus } from '/imports/api/collections';
+import { ProvidersStatus, ParsersStatus, ConsumersStatus, ConnectorsStatus,  ProvidersTemplate} from '/imports/api/collections';
 import { Connectors } from '../imports/api/collections';
 import { ComponentDefinitions } from '/imports/api/collections';
 
@@ -25,4 +25,8 @@ Meteor.publish('connectors', function () {
 
 Meteor.publish('component_definitions', function () {
   return ComponentDefinitions.find();
+});
+
+Meteor.publish('providers_template', function () {
+  return ProvidersTemplate.find();
 });

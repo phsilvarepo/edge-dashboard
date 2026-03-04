@@ -7,3 +7,5 @@ export const ConnectorsStatus = new Mongo.Collection('connectors_status');
 
 export const Connectors = new Mongo.Collection('connectors');
 export const ComponentDefinitions = new Mongo.Collection('component_definitions');
+
+export const ProvidersTemplate = new Mongo.Collection('providers_template');

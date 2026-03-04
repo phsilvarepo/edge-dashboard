@@ -1,64 +1,102 @@
 import React, { useState } from 'react';
 import { Meteor } from 'meteor/meteor';
-import { useTracker } from 'meteor/react-meteor-data';
-import { ProvidersStatus, ComponentDefinitions } from '/imports/api/collections';
+import { ProvidersStatus, ComponentDefinitions, ProvidersTemplate } from '/imports/api/collections';
 import './Tabs.css';
+import { useTracker } from 'meteor/react-meteor-data';
+
+// Schema for required parameters per method
+const CAPTURE_CONFIGS = {
+  MQTT_TASMOTA: {
+    label: 'Tasmota MQTT',
+    fields: [
+      { id: 'topic', label: 'Base Topic', placeholder: 'eg: tasmota_garage', type: 'text' }
+    ]
+  },
+  MQTT_SHELLY: {
+    label: 'Shelly MQTT',
+    fields: [
+      { id: 'deviceId', label: 'Shelly ID', placeholder: 'eg: shellyuni-34C1', type: 'text' }
+    ]
+  }
+};
 
 export default function ProvidersTab() {
+  // Discovery & Global States
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [showDiscModal, setShowDiscModal] = useState(false);
-  const [selectedSensor, setSelectedSensor] = useState(null);
-  
-  // States for connection verification
   const [isTesting, setIsTesting] = useState(false);
   const [connectionError, setConnectionError] = useState(null);
+  const [mqttConfig, setMqttConfig] = useState({ brokerUrl: '', username: '', password: '' });
 
-  // Discovery Form State
-  const [mqttConfig, setMqttConfig] = useState({
-    brokerUrl: '', // Reset to empty for clean open
-    username: '',
-    password: ''
-  });
+  // Inspector & Info States
+  const [selectedSensor, setSelectedSensor] = useState(null);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  
+  // Creation Wizard States
+  const [wizardTemplate, setWizardTemplate] = useState(null);
+  const [wizardData, setWizardData] = useState({ method: '', params: {} });
 
-  const { providers, definitions, isLoading } = useTracker(() => {
+  const { providers, templates, definitions, isLoading } = useTracker(() => {
     const sub1 = Meteor.subscribe('providers_status');
     const sub2 = Meteor.subscribe('component_definitions');
+    const sub3 = Meteor.subscribe('providers_template');
     
     return {
       providers: ProvidersStatus.find({}, { sort: { id: 1 } }).fetch(),
+      templates: ProvidersTemplate.find({}, { sort: { name: 1 } }).fetch(),
       definitions: ComponentDefinitions.find({ type: 'provider' }).fetch(),
-      isLoading: !sub1.ready() || !sub2.ready(),
+      isLoading: !sub1.ready() || !sub2.ready() || !sub3.ready(),
     };
   });
+
+  const handleStartWizard = (t) => {
+    const methods = t.supportedMethods || [];
+    const defaultMethod = methods.length > 0 ? methods[0] : 'MQTT_TASMOTA';
+    setWizardTemplate(t);
+    setWizardData({ method: defaultMethod, params: {} });
+  };
+
+  const handleCreateInstance = () => {
+    const config = CAPTURE_CONFIGS[wizardData.method];
+    const missing = config.fields.find(f => !wizardData.params[f.id]);
+    if (missing) return alert(`Please enter ${missing.label}`);
+
+    Meteor.call('providers.createInstance', {
+      templateId: wizardTemplate._id,
+      method: wizardData.method,
+      params: wizardData.params
+    }, (err) => {
+      if (err) alert("Error: " + err.reason);
+      else setWizardTemplate(null);
+    });
+  };
+
+  const handleRemoveInstance = (id) => {
+    if (window.confirm("Are you sure you want to remove this live provider?")) {
+      Meteor.call('providers.removeInstance', id, (err) => {
+        if (err) alert(err.reason);
+        else setSelectedSensor(null);
+      });
+    }
+  };
 
   const handleDiscovery = () => {
     setConnectionError(null);
     setIsTesting(true);
-
     Meteor.call('providers.autoDiscover', mqttConfig, (err, success) => {
       setIsTesting(false);
-      
-      if (err || success === false) {
-        setConnectionError("Error connecting. Please retry.");
-      } else {
-        setShowDiscModal(false);
-        setIsDiscovering(true);
-        setTimeout(() => setIsDiscovering(false), 15000);
+      if (err || success === false) { 
+        setConnectionError("Error connecting. Please check URL and credentials."); 
+      } else { 
+        setShowDiscModal(false); 
+        setIsDiscovering(true); 
+        setTimeout(() => setIsDiscovering(false), 15000); 
       }
     });
   };
 
-  const openModal = () => {
-    setMqttConfig({ brokerUrl: '', username: '', password: '' });
-    setConnectionError(null);
-    setShowDiscModal(true);
-  };
-
-  const isOnline = (lastRun) => {
-    if (!lastRun) return false;
-    return lastRun >= new Date(Date.now() - 35000); 
-  };
-
+  const isOnline = (lastRun) => lastRun && lastRun >= new Date(Date.now() - 35000);
+  
   const getLabel = (p) => {
     const def = definitions.find(d => d.name === p.provider);
     return def ? def.label : `${p.provider} (${p.parentId})`; 
@@ -66,21 +104,33 @@ export default function ProvidersTab() {
 
   const renderLiveValue = (data) => {
     if (!data) return 'WAITING...';
-    const entries = Object.entries(data);
-    if (entries.length === 0) return 'EMPTY';
-    return `${entries[0][0]}: ${entries[0][1]}`;
+    
+    try {
+      // If it's a string from the DB, parse it. If it's already an object, use it.
+      const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+      const entries = Object.entries(parsed);
+      
+      if (entries.length === 0) return 'EMPTY';
+      
+      // Show the first value (e.g., "PM2.5: 10.6")
+      return `${entries[0][0]}: ${entries[0][1]}`;
+    } catch (e) {
+      return 'DATA ERROR';
+    }
   };
 
   if (isLoading) return <div className="loading-text">LINKING PROVIDER DATA...</div>;
 
   return (
     <div className="tab-container">
+      {/* --- ACTIVE PROVIDERS SECTION --- */}
       <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>DATA PROVIDERS</h2>
-        <button 
-          className={`btn-primary ${isDiscovering ? 'pulse' : ''}`} 
-          onClick={openModal}
-        >
+        <button className={`btn-primary ${isDiscovering ? 'pulse' : ''}`} onClick={() => {
+          setMqttConfig({ brokerUrl: '', username: '', password: '' });
+          setConnectionError(null);
+          setShowDiscModal(true);
+        }}>
           {isDiscovering ? 'SCANNING HUB...' : 'AUTO-DISCOVERY'}
         </button>
       </div>
@@ -88,17 +138,13 @@ export default function ProvidersTab() {
       <div className="status-grid">
         {providers.map(p => {
           const active = isOnline(p.lastRun);
-          const displayLabel = getLabel(p);
-
           return (
             <div className="status-card clickable" key={p._id} onClick={() => setSelectedSensor(p)}>
               <div className="status-header">
-                <h4 style={{ color: '#58a6ff', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                  {displayLabel}
-                </h4>
+                <h4 style={{ color: '#58a6ff', textTransform: 'uppercase', letterSpacing: '1px' }}>{getLabel(p)}</h4>
                 <div className={`pulse-dot ${active ? 'active' : ''}`}></div>
               </div>
-
+              
               <div className="status-meta">
                 <div className="meta-item" style={{ background: '#0d1117', padding: '6px', borderRadius: '4px', marginBottom: '8px' }}>
                   <span>LIVE DATA</span>
@@ -135,74 +181,95 @@ export default function ProvidersTab() {
         )}
       </div>
 
-      {/* --- DISCOVERY CONFIG MODAL --- */}
-      {showDiscModal && (
-        <div className="modal-overlay" onClick={() => !isTesting && setShowDiscModal(false)}>
-          <div className="modal-content discovery-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>MQTT CONFIGURATION</h3>
-              {!isTesting && <button className="close-btn" onClick={() => setShowDiscModal(false)}>×</button>}
+      <hr style={{ border: 'none', borderTop: '1px solid #30363d', margin: '40px 0' }} />
+
+      {/* --- PROVIDER TEMPLATES SECTION --- */}
+      <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2>PROVIDER BLUEPRINTS</h2>
+        <button className="btn-secondary" style={{ fontSize: '12px' }}>+ NEW TEMPLATE</button>
+      </div>
+      
+      <div className="template-list" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {templates.map(t => (
+          <div key={t._id} className="template-item clickable" onClick={() => setSelectedTemplate(t)} style={{ 
+            background: '#161b22', border: '1px solid #30363d', padding: '15px', borderRadius: '6px',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+          }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <strong style={{ color: '#c9d1d9' }}>{t.label || t.name}</strong>
+                {t.supportedMethods && t.supportedMethods.map(m => (
+                  <span key={m} className="tag" style={{ fontSize: '9px', background: '#238636', padding: '2px 6px', borderRadius: '10px', color: 'white' }}>
+                    {m.replace('MQTT_', '')}
+                  </span>
+                ))}
+              </div>
+              <p style={{ margin: '5px 0 0 0', fontSize: '13px', color: '#8b949e' }}>{t.description || 'No description provided.'}</p>
             </div>
-            
+            <button 
+              className="add-instance-btn"
+              onClick={(e) => { e.stopPropagation(); handleStartWizard(t); }}
+              style={{ background: '#238636', border: 'none', color: 'white', borderRadius: '4px', width: '32px', height: '32px', cursor: 'pointer', fontSize: '20px' }}
+            >
+              +
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* --- WIZARD CONFIG MODAL --- */}
+      {wizardTemplate && (
+        <div className="modal-overlay">
+          <div className="modal-content discovery-modal" style={{ maxWidth: '450px' }}>
+            <div className="modal-header">
+              <h3>LINK {wizardTemplate.label}</h3>
+              <button className="close-btn" onClick={() => setWizardTemplate(null)}>×</button>
+            </div>
             <div className="modal-body">
-              <p className="modal-subtitle">Enter your broker details to start auto-discovery</p>
-              
               <div className="input-group">
-                <label>Broker Address</label>
-                <input 
-                  type="text" 
-                  className="discovery-input"
-                  placeholder="eg: mqtt://10.0.200.25:1883"
-                  disabled={isTesting}
-                  value={mqttConfig.brokerUrl}
-                  onChange={e => setMqttConfig({...mqttConfig, brokerUrl: e.target.value})}
-                />
+                <label>Acquisition Method</label>
+                {(wizardTemplate.supportedMethods && wizardTemplate.supportedMethods.length > 1) ? (
+                   <select 
+                    className="discovery-input"
+                    value={wizardData.method}
+                    onChange={e => setWizardData({...wizardData, method: e.target.value, params: {}})}
+                  >
+                    {wizardTemplate.supportedMethods.map(m => (
+                      <option key={m} value={m}>{CAPTURE_CONFIGS[m]?.label || m}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <div style={{ padding: '10px', background: '#0d1117', borderRadius: '4px', color: '#58a6ff', border: '1px solid #30363d' }}>
+                    {CAPTURE_CONFIGS[wizardData.method]?.label || wizardData.method}
+                  </div>
+                )}
               </div>
 
-              <div className="input-row">
-                <div className="input-group">
-                  <label>Username</label>
+              {CAPTURE_CONFIGS[wizardData.method]?.fields.map(field => (
+                <div key={field.id} className="input-group" style={{ marginTop: '15px' }}>
+                  <label>{field.label}</label>
                   <input 
-                    type="text" 
+                    type={field.type}
                     className="discovery-input"
-                    placeholder="Optional"
-                    disabled={isTesting}
-                    value={mqttConfig.username}
-                    onChange={e => setMqttConfig({...mqttConfig, username: e.target.value})}
+                    placeholder={field.placeholder}
+                    value={wizardData.params[field.id] || ''}
+                    onChange={e => setWizardData({
+                      ...wizardData, 
+                      params: { ...wizardData.params, [field.id]: e.target.value }
+                    })}
                   />
                 </div>
-                <div className="input-group">
-                  <label>Password</label>
-                  <input 
-                    type="password" 
-                    className="discovery-input"
-                    placeholder="Optional"
-                    disabled={isTesting}
-                    value={mqttConfig.password}
-                    onChange={e => setMqttConfig({...mqttConfig, password: e.target.value})}
-                  />
-                </div>
-              </div>
+              ))}
 
-              {connectionError && (
-                <div className="error-text" style={{ color: '#ff4d4d', marginTop: '10px', fontSize: '12px', textAlign: 'center' }}>
-                  {connectionError}
-                </div>
-              )}
-
-              <button 
-                className={`start-scan-btn ${isTesting ? 'pulse' : ''}`} 
-                onClick={handleDiscovery}
-                disabled={!mqttConfig.brokerUrl || isTesting}
-              >
-                {isTesting ? 'Checking connection...' : 'START SCANNING'}
+              <button className="start-scan-btn" style={{ marginTop: '25px' }} onClick={handleCreateInstance}>
+                CREATE LIVE INSTANCE
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* --- SENSOR DETAIL POPUP --- */}
+      {/* --- SENSOR DETAIL POPUP (INSPECTOR) --- */}
       {selectedSensor && (
         <div className="modal-overlay" onClick={() => setSelectedSensor(null)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -212,12 +279,66 @@ export default function ProvidersTab() {
             </div>
             <div className="modal-body">
               <p><small>SOURCE ID:</small> <strong>{selectedSensor.parentId}</strong></p>
+              <p><small>METHOD:</small> <strong>{selectedSensor.captureMethod}</strong></p>
               <p><small>TOPIC:</small> <code className="topic-code">{selectedSensor.topic}</code></p>
-              <div className="telemetry-box">
-                <h5>LIVE PAYLOAD</h5>
-                <pre>{JSON.stringify(selectedSensor.latestData, null, 2)}</pre>
+              
+              <div className="telemetry-box" style={{ background: '#0d1117', padding: '10px', borderRadius: '4px', margin: '15px 0' }}>
+                <h5 style={{ margin: '0 0 10px 0', fontSize: '11px', color: '#8b949e' }}>LIVE PAYLOAD</h5>
+                <pre style={{ fontSize: '12px', color: '#3fb950' }}>{JSON.stringify(selectedSensor.latestData, null, 2)}</pre>
               </div>
-              <a href={selectedSensor.docs} target="_blank" className="docs-btn">📖 DOCUMENTATION</a>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                <a href={selectedSensor.docs} target="_blank" className="docs-btn" style={{ flex: 1, textAlign: 'center', textDecoration: 'none' }}>📖 DOCS</a>
+                <button 
+                  onClick={() => handleRemoveInstance(selectedSensor._id)}
+                  style={{ background: '#da3633', border: 'none', color: 'white', padding: '0 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                  REMOVE
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- BLUEPRINT INFO POPUP --- */}
+      {selectedTemplate && (
+        <div className="modal-overlay" onClick={() => setSelectedTemplate(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>BLUEPRINT: {selectedTemplate.label}</h3>
+              <button className="close-btn" onClick={() => setSelectedTemplate(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p><small>NAME:</small> <strong>{selectedTemplate.name}</strong></p>
+              <p style={{ color: '#8b949e', marginTop: '15px' }}>{selectedTemplate.description}</p>
+              <a href={selectedTemplate.docs} target="_blank" className="docs-btn" style={{ display: 'block', textAlign: 'center', marginTop: '20px' }}>📖 VIEW DOCUMENTATION</a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- DISCOVERY CONFIG MODAL --- */}
+      {showDiscModal && (
+        <div className="modal-overlay" onClick={() => !isTesting && setShowDiscModal(false)}>
+          <div className="modal-content discovery-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>MQTT CONFIGURATION</h3>
+              {!isTesting && <button className="close-btn" onClick={() => setShowDiscModal(false)}>×</button>}
+            </div>
+            <div className="modal-body">
+              <div className="input-group">
+                <label>Broker Address</label>
+                <input type="text" className="discovery-input" placeholder="mqtt://192.168.1.50:1883" disabled={isTesting} value={mqttConfig.brokerUrl} onChange={e => setMqttConfig({...mqttConfig, brokerUrl: e.target.value})}/>
+              </div>
+              <div className="input-row" style={{ display: 'flex', gap: '10px' }}>
+                <div className="input-group" style={{ flex: 1 }}><label>Username</label><input type="text" className="discovery-input" placeholder="Optional" disabled={isTesting} value={mqttConfig.username} onChange={e => setMqttConfig({...mqttConfig, username: e.target.value})}/></div>
+                <div className="input-group" style={{ flex: 1 }}><label>Password</label><input type="password" className="discovery-input" placeholder="Optional" disabled={isTesting} value={mqttConfig.password} onChange={e => setMqttConfig({...mqttConfig, password: e.target.value})}/></div>
+              </div>
+              {connectionError && <div className="error-text" style={{ color: '#ff4d4d', marginTop: '10px', fontSize: '12px', textAlign: 'center' }}>{connectionError}</div>}
+              <button className={`start-scan-btn ${isTesting ? 'pulse' : ''}`} onClick={handleDiscovery} disabled={!mqttConfig.brokerUrl || isTesting}>
+                {isTesting ? 'Checking connection...' : 'START SCANNING'}
+              </button>
             </div>
           </div>
         </div>
