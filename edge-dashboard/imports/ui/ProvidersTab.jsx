@@ -9,12 +9,18 @@ const CAPTURE_CONFIGS = {
   MQTT_TASMOTA: {
     label: 'Tasmota MQTT',
     fields: [
-      { id: 'topic', label: 'Base Topic', placeholder: 'eg: tasmota_garage', type: 'text' }
+      { id: 'broker', label: 'Broker Adress', placeholder: 'eg: mqtt://10.0.200.25:1883', type: 'text' },
+      { id: 'username', label: 'Broker Username', placeholder: 'Optional', type: 'text' },
+      { id: 'pass', label: 'Broker Password', placeholder: 'Optional', type: 'text' },
+      { id: 'topic', label: 'Base Topic', placeholder: 'eg: HS4U/tele/tasmota_838A04/SENSOR', type: 'text' }
     ]
   },
   MQTT_SHELLY: {
     label: 'Shelly MQTT',
     fields: [
+      { id: 'broker', label: 'Broker Adress', placeholder: 'eg: mqtt://10.0.200.25:1883', type: 'text' },
+      { id: 'username', label: 'Broker Username', placeholder: 'Optional', type: 'text' },
+      { id: 'pass', label: 'Broker Password', placeholder: 'Optional', type: 'text' },
       { id: 'deviceId', label: 'Shelly ID', placeholder: 'eg: shellyuni-34C1', type: 'text' }
     ]
   }
@@ -105,18 +111,16 @@ export default function ProvidersTab() {
   const renderLiveValue = (data) => {
     if (!data) return 'WAITING...';
     
-    try {
-      // If it's a string from the DB, parse it. If it's already an object, use it.
-      const parsed = typeof data === 'string' ? JSON.parse(data) : data;
-      const entries = Object.entries(parsed);
-      
-      if (entries.length === 0) return 'EMPTY';
-      
-      // Show the first value (e.g., "PM2.5: 10.6")
-      return `${entries[0][0]}: ${entries[0][1]}`;
-    } catch (e) {
-      return 'DATA ERROR';
-    }
+    const entries = Object.entries(data);
+    if (entries.length === 0) return 'EMPTY';
+    
+    // Get the first key/value pair
+    let [key, val] = entries[0];
+    
+    // Change "PM2_5" back to "PM2.5" for display only
+    const displayKey = key.replace(/_/g, '.');
+    
+    return `${displayKey}: ${val}`;
   };
 
   if (isLoading) return <div className="loading-text">LINKING PROVIDER DATA...</div>;
@@ -147,7 +151,7 @@ export default function ProvidersTab() {
               
               <div className="status-meta">
                 <div className="meta-item" style={{ background: '#0d1117', padding: '6px', borderRadius: '4px', marginBottom: '8px' }}>
-                  <span>LIVE DATA</span>
+                  <span>{active ? 'LIVE DATA' : 'LAST DATA'}</span>
                   <span className="mono-text" style={{ color: active ? '#3fb950' : '#8b949e' }}>
                     {renderLiveValue(p.latestData)}
                   </span>
@@ -185,7 +189,7 @@ export default function ProvidersTab() {
 
       {/* --- PROVIDER TEMPLATES SECTION --- */}
       <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>PROVIDER BLUEPRINTS</h2>
+        <h2>PROVIDER TEMPLATES</h2>
         <button className="btn-secondary" style={{ fontSize: '12px' }}>+ NEW TEMPLATE</button>
       </div>
       
