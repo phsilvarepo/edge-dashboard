@@ -8,35 +8,33 @@ let isDiscoveryActive = false;
 
 const PARSE_STRATEGY = {
   MQTT_TASMOTA: {
-    // Simply grab the segment after 'tele/'
     getDeviceId: (input) => {
       const parts = input.split('/');
       return parts.find(p => p.toLowerCase().startsWith('tasmota')) || parts[2] || input;
     },
     getSearchArea: (payload) => (payload.sn ? { ...payload.sn, ...payload } : payload),
     fixTopic: (input) => {
-      // If the user provided a full topic ending in /SENSOR, use it. 
-      // Otherwise, just ensure it ends with /SENSOR.
       return input.toUpperCase().endsWith('/SENSOR') ? input : `${input}/SENSOR`;
     }
   },
   MQTT_SHELLY: {
-    getDeviceId: (input) => input.split('/').find(p => p.includes('shelly')) || input.split('/')[1] || input,
-    getSearchArea: (payload) => payload,
+    getDeviceId: (input) => {
+      const parts = input.split('/');
+      return parts.find(p => p.toLowerCase().includes('thermal') || p.toLowerCase().includes('shelly')) || parts[2] || parts[1] || input;
+    },
+    getSearchArea: (payload) => {
+      // If it's a raw array, we wrap it in IMG as a fallback
+      return Array.isArray(payload) ? { IMG: payload } : payload;
+    },
     fixTopic: (input) => {
-      const rawId = PARSE_STRATEGY.MQTT_SHELLY.getDeviceId(input);
-      return `shellies/${rawId}/status`;
+      return input;
     }
   }
 };
 
-/**
- * HELPER: Replaces dots in keys with underscores so MongoDB doesn't crash
- */
 const sanitizeKeys = (obj) => {
   if (typeof obj !== 'object' || obj === null) return obj;
   const newObj = Array.isArray(obj) ? [] : {};
-  
   Object.keys(obj).forEach(key => {
     const cleanKey = key.replace(/\./g, '_'); 
     newObj[cleanKey] = sanitizeKeys(obj[key]);
@@ -45,115 +43,164 @@ const sanitizeKeys = (obj) => {
 };
 
 /**
- * MAIN HANDLER: Processes incoming MQTT packets
+ * MAIN HANDLER: Processes incoming MQTT packets with Heavy Logging
  */
 const handleMqttMessage = async (topic, message) => {
   try {
+    const rawMessage = message.toString();
+    console.log(`\n📩 INCOMING MQTT [${topic}]`);
+    
     let payload;
     try {
-      payload = JSON.parse(message.toString());
+      payload = JSON.parse(rawMessage);
     } catch (e) {
+      console.log(`   ❌ Failed to parse JSON: ${e.message.substring(0, 50)}...`);
       return; 
     }
 
     let detectedMethod = '';
     let deviceId = 'UNKNOWN';
+    let sensorKeyFromTopic = null;
+    
+    const top = topic.toUpperCase();
+    const parts = topic.split('/');
 
-    // Support case-insensitive check for the prefix
-    if (topic.toUpperCase().startsWith('HS4U/TELE/')) {
+    // 1. PREFIX DETECTION LOGIC
+    if (top.startsWith('HS4U/TELE/')) {
       detectedMethod = 'MQTT_TASMOTA';
-      deviceId = topic.split('/')[2] || 'TASMOTA_DEV';
-    } else if (topic.startsWith('shellies/')) {
+      deviceId = parts[2] || 'TASMOTA_DEV';
+      console.log(`   🔍 Detected: TASMOTA | DeviceId: ${deviceId}`);
+    } 
+    else if (top.startsWith('HS4U/THERMAL/')) {
       detectedMethod = 'MQTT_SHELLY';
-      deviceId = topic.split('/')[1] || 'SHELLY_DEV';
-    } else {
+      deviceId = parts[2] || 'THERMAL_DEV';
+      sensorKeyFromTopic = parts[3]; // e.g. "IMG"
+      console.log(`   🔍 Detected: HS4U THERMAL | DeviceId: ${deviceId} | PathKey: ${sensorKeyFromTopic}`);
+    } 
+    else if (top.startsWith('SHELLIES/')) {
+      detectedMethod = 'MQTT_SHELLY';
+      deviceId = parts[1] || 'SHELLY_DEV';
+      console.log(`   🔍 Detected: SHELLY NATIVE | DeviceId: ${deviceId}`);
+    } 
+    else {
+      console.log(`   ⏩ Ignored Prefix: ${topic}`);
       return; 
     }
 
-    const searchArea = payload.sn ? { ...payload.sn, ...payload } : payload;
-    const shortId = deviceId.replace('tasmota_', '').replace('shelly_', '').toUpperCase();
+    const strategy = PARSE_STRATEGY[detectedMethod];
+    
+    // 2. SEARCH AREA PREP
+    const searchArea = sensorKeyFromTopic 
+      ? { [sensorKeyFromTopic]: payload } 
+      : strategy.getSearchArea(payload);
+    
+    const keysToProcess = Object.keys(searchArea);
+    console.log(`   📦 Search Area Keys: [${keysToProcess.join(', ')}]`);
 
-    for (const key of Object.keys(searchArea)) {
+    const shortId = deviceId.replace(/tasmota_|shelly_|thermal_/gi, '').toUpperCase();
+
+    // 3. TEMPLATE MATCHING
+    for (const key of keysToProcess) {
       if (['Time', 'TempUnit'].includes(key)) continue;
 
+      console.log(`   🧐 Looking for template for key: "${key}"...`);
       const template = await ProvidersTemplate.findOneAsync({ 
         name: key,
-        supportedMethods: detectedMethod 
+        supportedMethods: { $in: ['MQTT_TASMOTA', 'MQTT_SHELLY'] } 
       });
 
-      if (template) {
-        if (detectedMethod === 'MQTT_TASMOTA' && !topic.toUpperCase().endsWith('/SENSOR')) continue;
-        
-        const uniqueId = `${shortId}_${key}`.toUpperCase();
-        const existingInstance = await ProvidersStatus.findOneAsync(uniqueId);
-        
-        // Guard Check
-        if (!existingInstance && !isDiscoveryActive) continue;
-
-        const cleanData = sanitizeKeys(searchArea[key]);
-
-        console.log(`✅ MATCH! Device: ${shortId} | Sensor: ${key}`);
-        console.log(`📊 DATA:`, JSON.stringify(cleanData));
-
-        await ProvidersStatus.upsertAsync(
-          { _id: uniqueId },
-          {
-            $set: {
-              id: uniqueId,
-              templateId: template._id,
-              provider: key,
-              label: template.label,
-              captureMethod: detectedMethod,
-              topic: topic,
-              lastRun: new Date(),
-              latestData: cleanData, 
-              parentId: shortId,
-              docs: template.docs
-            }
-          }
-        );
+      if (!template) {
+        console.log(`   ⚠️  No template found in DB with name: "${key}"`);
+        continue;
       }
+
+      // Tasmota specific validation
+      if (detectedMethod === 'MQTT_TASMOTA' && !top.endsWith('/SENSOR')) {
+        console.log(`   ⏩ Tasmota key "${key}" ignored because topic doesn't end in /SENSOR`);
+        continue;
+      }
+      
+      const uniqueId = `${shortId}_${key}`.toUpperCase();
+      console.log(`   🎯 Match found! UniqueId: ${uniqueId}`);
+
+      const existingInstance = await ProvidersStatus.findOneAsync(uniqueId);
+      
+      if (!existingInstance && !isDiscoveryActive) {
+        console.log(`   🚫 Instance not found in DB and Discovery is OFF. Dropping packet.`);
+        continue;
+      }
+
+      if (isDiscoveryActive && !existingInstance) {
+        console.log(`   ✨ Discovery ACTIVE: Creating new provider status for ${uniqueId}`);
+      }
+
+      const cleanData = sanitizeKeys(searchArea[key]);
+
+      await ProvidersStatus.upsertAsync(
+        { _id: uniqueId },
+        {
+          $set: {
+            id: uniqueId,
+            templateId: template._id,
+            provider: key,
+            label: template.label,
+            captureMethod: detectedMethod,
+            topic: topic,
+            lastRun: new Date(),
+            latestData: cleanData, 
+            parentId: shortId,
+            docs: template.docs
+          }
+        }
+      );
+      console.log(`   ✅ DB Updated successfully for ${uniqueId}`);
     }
   } catch (e) { 
-    console.error("❌ MQTT Handler Error:", e.message);
+    console.error("❌ MQTT Handler Total Failure:", e);
   }
 };
 
 Meteor.methods({
   async 'providers.createInstance'({ templateId, method, params }) {
+    console.log(`\n🚀 MANUAL LINK: Method=${method} | Template=${templateId}`);
+    
+    check(templateId, String);
+    check(method, String);
+    check(params, Object);
+
     const template = await ProvidersTemplate.findOneAsync(templateId);
     if (!template) throw new Meteor.Error('not-found', 'Blueprint not found');
 
     const strategy = PARSE_STRATEGY[method];
-    const inputVal = method === 'MQTT_TASMOTA' ? params.topic : params.deviceId;
-    
-    // 1. The topic is exactly what the user typed (plus /SENSOR if they forgot it)
+    if (!strategy) throw new Meteor.Error('invalid-method', 'Unknown Method');
+
+    const inputVal = params.topic || params.deviceId;
     const computedTopic = strategy.fixTopic(inputVal);
     
-    // 2. Extract ID for DB indexing (keeping it uppercase for the _id only)
     const rawId = strategy.getDeviceId(computedTopic);
-    const parentId = rawId.replace(/tasmota_/i, '').toUpperCase();
+    const parentId = rawId.replace(/tasmota_|shelly_|thermal_/gi, '').toUpperCase();
     const instanceId = `${parentId}_${template.name}`.toUpperCase();
 
-    console.log(`📡 Subscribing to: ${computedTopic}`);
-    console.log(`🆔 Internal ID: ${instanceId}`);
+    console.log(`   📍 Computed Topic: ${computedTopic}`);
+    console.log(`   🆔 Instance ID: ${instanceId}`);
 
     const setupClient = (client) => {
+        console.log(`   📡 Subscribing to: ${computedTopic}`);
         client.subscribe(computedTopic, (err) => {
-            if (err) console.error("Sub Error:", err);
-            else console.log("✔️ Subscribed");
+            if (err) console.error("   ❌ Subscription Error:", err);
+            else console.log("   ✔️ Subscription Successful");
         });
         
         if (method === 'MQTT_TASMOTA') {
-          // Poke using the raw casing from the ID to be safe
           const pokeTopic = `HS4U/cmnd/${rawId}/status`;
+          console.log(`   📤 Poking Tasmota: ${pokeTopic}`);
           client.publish(pokeTopic, '8');
         }
     };
 
     if (!globalMqttClient || !globalMqttClient.connected) {
       if (params.broker) {
-        console.log(`🔌 Initializing connection to ${params.broker}...`);
+        console.log(`   🔌 Opening new connection to ${params.broker}...`);
         globalMqttClient = mqtt.connect(params.broker, {
           username: params.username || '',
           password: params.pass || '', 
@@ -161,15 +208,15 @@ Meteor.methods({
         });
         
         globalMqttClient.on('connect', () => {
-          console.log("🟢 MQTT Connected");
+          console.log("   🟢 MQTT Connected");
           setupClient(globalMqttClient);
         });
 
         globalMqttClient.on('message', (topic, message) => { handleMqttMessage(topic, message); });
-        globalMqttClient.on('error', (err) => console.error("MQTT Error:", err.message));
+        globalMqttClient.on('error', (err) => console.error("   ❌ MQTT Socket Error:", err.message));
       }
     } else {
-        console.log("Using existing MQTT connection.");
+        console.log("   ♻️ Using existing MQTT connection.");
         setupClient(globalMqttClient);
     }
 
@@ -198,17 +245,7 @@ Meteor.methods({
     if (Meteor.isClient) return;
 
     return new Promise((resolve) => {
-      console.log(`🔍 AutoDiscovery starting...`);
-      const currentUrl = globalMqttClient?.options?.href || "";
-      const isDifferentAddress = !currentUrl.includes(config.brokerUrl);
-
-      if (globalMqttClient && globalMqttClient.connected && !isDifferentAddress) {
-        isDiscoveryActive = true;
-        globalMqttClient.publish('HS4U/cmnd/tasmota/backlog', 'Status 8');
-        Meteor.setTimeout(() => { isDiscoveryActive = false; }, 15000);
-        return resolve(true);
-      }
-
+      console.log(`\n🔍 AUTODISCOVERY STARTING...`);
       if (globalMqttClient) globalMqttClient.end(true);
 
       globalMqttClient = mqtt.connect(config.brokerUrl, {
@@ -219,15 +256,21 @@ Meteor.methods({
 
       globalMqttClient.on('connect', () => {
         isDiscoveryActive = true;
-        globalMqttClient.subscribe(['HS4U/tele/#', 'shellies/#']);
+        const scanTopics = ['HS4U/tele/#', 'HS4U/thermal/#', 'shellies/#'];
+        console.log(`   📡 Subscribed to scan topics: ${scanTopics.join(', ')}`);
+        globalMqttClient.subscribe(scanTopics);
         globalMqttClient.publish('HS4U/cmnd/tasmota/backlog', 'Status 8');
         globalMqttClient.on('message', (topic, message) => { handleMqttMessage(topic, message); });
-        Meteor.setTimeout(() => { isDiscoveryActive = false; }, 15000);
+        
+        Meteor.setTimeout(() => { 
+            isDiscoveryActive = false; 
+            console.log("   ⏱️ Discovery period ended.");
+        }, 15000);
         resolve(true);
       });
 
       globalMqttClient.on('error', (err) => {
-        console.error("Discovery Error:", err.message);
+        console.error("   ❌ Discovery Broker Error:", err.message);
         resolve(false);
       });
 
@@ -237,6 +280,7 @@ Meteor.methods({
 
   async 'providers.removeInstance'(instanceId) {
     check(instanceId, String);
+    console.log(`🗑️ Removing instance: ${instanceId}`);
     return await ProvidersStatus.removeAsync(instanceId);
   },
 
@@ -252,5 +296,6 @@ Meteor.methods({
 
   async 'connectors.removeAll'() {
     return await Connectors.removeAsync({});
-  }
+  },
+
 });

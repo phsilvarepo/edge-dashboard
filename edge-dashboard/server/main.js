@@ -16,58 +16,6 @@ const seedDefinitions = async () => {
   }
 
   const definitions = [
-    /*{
-      type: 'provider_template',
-      name: 'random',
-      label: 'Random Number Generator',
-      outputs: ['simple_json'],
-      values: [
-        readings: 12123,
-        unit: Celsius,
-      ]
-    },*/
-    {
-      type: 'provider',
-      name: 'random',
-      label: 'Random Number Generator',
-      outputs: ['simple_json'],
-      parameters: []
-    },
-    {
-      type: 'provider',
-      name: 'humiditySensor',
-      label: 'Humidity Sensor',
-      outputs: ['simple_json'],
-      parameters: []
-    },
-    {
-      type: 'provider',
-      name: 'lightSensor',
-      label: 'Light Sensor',
-      outputs: ['simple_json'],
-      parameters: []
-    },
-    {
-      type: 'provider',
-      name: 'soundSensor',
-      label: 'Sound Sensor',
-      outputs: ['simple_json'],
-      parameters: []
-    },
-    {
-      type: 'provider',
-      name: 'distanceSensor',
-      label: 'Distance Sensor',
-      outputs: ['simple_json'],
-      parameters: []
-    },
-    {
-      type: 'provider',
-      name: 'SPLBoard',
-      label: 'SPL Sensor Board',
-      outputs: ['simple_json'],
-      parameters: []
-    },
     {
       type: 'provider',
       name: 'mqtt_provider',
@@ -75,18 +23,6 @@ const seedDefinitions = async () => {
       outputs: ['simple_json'],
       parameters: []
     },
-    /*{
-      type: 'provider',
-      name: 'mqtt_provider',
-      label: 'MQTT Broker',
-      outputs: ['raw_json'],
-      parameters: [
-        { name: 'brokerUrl', type: 'text', label: 'Broker URL (mqtt://...)' },
-        { name: 'topic', type: 'text', label: 'Subscription Topic' },
-        { name: 'username', type: 'text', label: 'Username' },
-        { name: 'password', type: 'password', label: 'Password' }
-      ]
-    },*/
     {
       type: 'parser',
       name: 'passthrough',
@@ -97,10 +33,18 @@ const seedDefinitions = async () => {
     },
     {
       type: 'parser',
-      name: 'filter_json',
-      label: 'Filter JSON',
-      inputs: ['simple_json', 'raw_json'],
-      outputs: ['processed_data'],
+      name: 'convert_Image',
+      label: 'Convert Image',
+      inputs: ['image'],
+      outputs: ['jpg'],
+      parameters: []
+    },
+    {
+      type: 'parser',
+      name: 'json_to_csv',
+      label: 'Convert Image',
+      inputs: ['simple_json'],
+      outputs: ['csv'],
       parameters: []
     },
     {
@@ -124,6 +68,18 @@ const seedDefinitions = async () => {
       label: 'Meteor Dashboard Monitor',
       inputs: ['processed_data'],
       parameters: []
+    },
+    {
+      type: 'consumer',
+      name: 'minioBucket',
+      label: 'MinIO Bucket',
+      inputs: ['processed_data'],
+      parameters: [
+        { name: 'minIO_url', type: 'text', label: 'MinIO URL' },
+        { name: 'minIO_username', type: 'text', label: 'MinIO Username' },
+        { name: 'minIO_password', type: 'password', label: 'MinIO Password' },
+        { name: 'minIO_bucket', type: 'text', label: 'Bucket name'}
+      ]
     },
     {
       type: 'consumer',

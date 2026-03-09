@@ -9,19 +9,19 @@ const CAPTURE_CONFIGS = {
   MQTT_TASMOTA: {
     label: 'Tasmota MQTT',
     fields: [
-      { id: 'broker', label: 'Broker Adress', placeholder: 'eg: mqtt://10.0.200.25:1883', type: 'text' },
+      { id: 'broker', label: 'Broker Address', placeholder: 'eg: mqtt://10.0.200.25:1883', type: 'text' },
       { id: 'username', label: 'Broker Username', placeholder: 'Optional', type: 'text' },
       { id: 'pass', label: 'Broker Password', placeholder: 'Optional', type: 'text' },
       { id: 'topic', label: 'Base Topic', placeholder: 'eg: HS4U/tele/tasmota_838A04/SENSOR', type: 'text' }
     ]
   },
   MQTT_SHELLY: {
-    label: 'Shelly MQTT',
+    label: 'Generic / Thermal / Shelly', // Updated Label
     fields: [
-      { id: 'broker', label: 'Broker Adress', placeholder: 'eg: mqtt://10.0.200.25:1883', type: 'text' },
+      { id: 'broker', label: 'Broker Address', placeholder: 'eg: mqtt://10.0.200.25:1883', type: 'text' },
       { id: 'username', label: 'Broker Username', placeholder: 'Optional', type: 'text' },
       { id: 'pass', label: 'Broker Password', placeholder: 'Optional', type: 'text' },
-      { id: 'deviceId', label: 'Shelly ID', placeholder: 'eg: shellyuni-34C1', type: 'text' }
+      { id: 'topic', label: 'Full MQTT Topic', placeholder: 'eg: HS4U/thermal/thermal_CD4557/IMG', type: 'text' } // Clarified Placeholder
     ]
   }
 };
@@ -67,6 +67,7 @@ export default function ProvidersTab() {
     const missing = config.fields.find(f => !wizardData.params[f.id]);
     if (missing) return alert(`Please enter ${missing.label}`);
 
+    // Ensure we are passing the topic correctly regardless of the method label
     Meteor.call('providers.createInstance', {
       templateId: wizardTemplate._id,
       method: wizardData.method,
@@ -114,12 +115,17 @@ export default function ProvidersTab() {
     const entries = Object.entries(data);
     if (entries.length === 0) return 'EMPTY';
     
-    // Get the first key/value pair
     let [key, val] = entries[0];
-    
-    // Change "PM2_5" back to "PM2.5" for display only
     const displayKey = key.replace(/_/g, '.');
+
+    // Logic for Thermal Arrays: Show dimensions instead of raw data
+    if (Array.isArray(val)) {
+      const rows = val.length;
+      const cols = val[0]?.length || 0;
+      return `${displayKey}: [${rows}x${cols} Matrix]`;
+    }
     
+    // Standard logic for numbers/strings
     return `${displayKey}: ${val}`;
   };
 
