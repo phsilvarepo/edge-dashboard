@@ -3,6 +3,9 @@
   background-color: #161b22;
   color: #c9d1d9;
   border-radius: 12px;
+  /* Ensure container doesn't grow beyond its parent */
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .form-header {
@@ -54,7 +57,7 @@
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 14px;
   transition: all 0.2s ease;
-  box-sizing: border-box;
+  box-sizing: border-box; /* Ensures padding doesn't cause overflow */
 }
 
 /* Styled Placeholder Box for Logic Engine */
@@ -111,6 +114,7 @@
   border-radius: 8px;
   max-height: 180px;
   overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .tech-checkbox-label {
@@ -138,25 +142,18 @@
   gap: 15px;
 }
 
-.pipeline-preview {
-  font-size: 12px;
-  font-family: monospace;
-  background: rgba(88, 166, 255, 0.08);
-  padding: 15px;
-  border-radius: 8px;
-  color: #58a6ff;
-  border: 1px solid rgba(88, 166, 255, 0.3);
-  text-align: center;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  animation: fadeIn 0.4s ease forwards;
+/* Center the Deploy button container */
+form {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
 }
 
-.pipeline-hint {
-  font-size: 11px;
-  color: #484f58;
-  text-align: center;
-  font-style: italic;
+.form-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
 }
 
 .btn-create {
@@ -164,6 +161,7 @@
   color: white;
   border: none;
   height: 50px;
+  padding: 0 40px; /* Added horizontal padding */
   border-radius: 8px;
   font-weight: 700;
   font-size: 14px;
@@ -172,6 +170,10 @@
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  
+  /* Resetting these to ensure flex-parent handles it */
+  margin: 0 auto; 
+  min-width: 240px;
 }
 
 .btn-create:hover:not(:disabled) {
@@ -188,4 +190,43 @@
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(5px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+.consumer-item-wrapper {
+  margin-bottom: 10px;
+  border-left: 2px solid transparent;
+  padding-left: 5px;
+}
+
+.consumer-params-box {
+  margin-left: 25px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  margin-top: 5px;
+  box-sizing: border-box; /* Keep inner params contained */
+  border: 1px solid #30363d;
+}
+
+.param-input-group {
+  margin-bottom: 8px;
+}
+
+.param-label {
+  display: block;
+  font-size: 11px;
+  color: #8b949e;
+  margin-bottom: 3px;
+}
+
+.tech-input-small {
+  width: 100%;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  padding: 8px 12px;
+  font-size: 13px;
+  border-radius: 6px;
+  box-sizing: border-box; /* Fix for overflow */
+  font-family: 'JetBrains Mono', monospace;
 }

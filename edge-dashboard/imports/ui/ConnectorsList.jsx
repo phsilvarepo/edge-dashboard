@@ -11,8 +11,8 @@ export default function ConnectorsList() {
   const [isModalOpen, setModalOpen] = useState(false);
   const [isDeleteMode, setDeleteMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
 
-  // FETCH from the correct collection and subscription
   const { connectors, isLoading } = useTracker(() => {
     const handle = Meteor.subscribe('connectors');
     return {
@@ -30,14 +30,12 @@ export default function ConnectorsList() {
   };
 
   const handleToggleConnector = (id, currentStatus) => {
-    // Note: Ensure your method on server handles Connectors collection
     Meteor.call('pipeline.toggle', id, !currentStatus);
   };
 
   const handleDeleteSelected = () => {
     if (confirm(`Purge ${selectedIds.length} connector(s)?`)) {
       selectedIds.forEach(id => {
-        // Stop the logic before deleting
         Meteor.call('pipeline.toggle', id, false);
         Meteor.call('connectors.remove', id);
       });
@@ -46,24 +44,55 @@ export default function ConnectorsList() {
     }
   };
 
+  // NEW: Logic for Purge All
+  const handlePurgeAll = () => {
+    if (confirm("🚨 PURGE ALL CONNECTORS? This will stop and remove everything.")) {
+      connectors.forEach(c => {
+        Meteor.call('pipeline.toggle', c._id, false);
+        Meteor.call('connectors.remove', c._id);
+      });
+      setShowDropdown(false);
+    }
+  };
+
   if (isLoading) return <div className="loading-text">RETRIVING CONNECTORS...</div>;
 
   return (
     <div className="tab-container">
       <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2>ACTIVE ENGINE CONNECTORS <span className="text-dim">({connectors.length})</span></h2>
+        <h2>ACTIVE CONNECTORS <span className="text-dim">({connectors.length})</span></h2>
         
-        <div className="action-bar" style={{ display: 'flex', gap: '10px' }}>
+        <div className="action-bar" style={{ display: 'flex', gap: '10px', position: 'relative' }}>
           {hasConnectors && (
-            <button 
-              className={`btn-action ${isDeleteMode ? 'btn-danger' : ''}`}
-              onClick={() => { setDeleteMode(!isDeleteMode); setSelectedIds([]); }}
-            >
-              {isDeleteMode ? 'CANCEL' : 'MANAGE'}
-            </button>
+            <div className="dropdown-wrapper">
+              <button 
+                className={`btn-action ${isDeleteMode ? 'btn-danger' : ''}`}
+                onClick={() => {
+                  if (isDeleteMode) {
+                    setDeleteMode(false);
+                    setSelectedIds([]);
+                  } else {
+                    setShowDropdown(!showDropdown);
+                  }
+                }}
+              >
+                {isDeleteMode ? 'CANCEL' : 'MANAGE ▼'}
+              </button>
+
+              {showDropdown && !isDeleteMode && (
+                <div className="bulk-dropdown">
+                  <button className="dropdown-item" onClick={() => { setDeleteMode(true); setShowDropdown(false); }}>
+                    DELETE CONNECTORS
+                  </button>
+                  <button className="dropdown-item danger" onClick={handlePurgeAll}>
+                    DELETE ALL CONNECTORS
+                  </button>
+                </div>
+              )}
+            </div>
           )}
 
-          {!isDeleteMode && (
+          {hasConnectors && !isDeleteMode && (
             <button className="btn-add-main" onClick={() => setModalOpen(true)}>
               + NEW DEPLOYMENT
             </button>
@@ -123,7 +152,6 @@ export default function ConnectorsList() {
       ) : (
         <div className="empty-state-full">
           <h3>No deployments active</h3>
-          <p>The Service Engine is idling.</p>
           <button className="btn-add-main" style={{ marginTop: '20px' }} onClick={() => setModalOpen(true)}>
             DEPLOY FIRST SENSOR
           </button>

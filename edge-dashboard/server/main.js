@@ -42,7 +42,7 @@ const seedDefinitions = async () => {
     {
       type: 'parser',
       name: 'json_to_csv',
-      label: 'Convert Image',
+      label: 'Convert JSON to CSV',
       inputs: ['simple_json'],
       outputs: ['csv'],
       parameters: []
@@ -64,20 +64,13 @@ const seedDefinitions = async () => {
     },
     {
       type: 'consumer',
-      name: 'meteorMonitor',
-      label: 'Meteor Dashboard Monitor',
-      inputs: ['processed_data'],
-      parameters: []
-    },
-    {
-      type: 'consumer',
       name: 'minioBucket',
       label: 'MinIO Bucket',
       inputs: ['processed_data'],
       parameters: [
         { name: 'minIO_url', type: 'text', label: 'MinIO URL' },
-        { name: 'minIO_username', type: 'text', label: 'MinIO Username' },
-        { name: 'minIO_password', type: 'password', label: 'MinIO Password' },
+        { name: 'minIO_username', type: 'text', label: 'MinIO username' },
+        { name: 'minIO_password', type: 'password', label: 'MinIO password' },
         { name: 'minIO_bucket', type: 'text', label: 'Bucket name'}
       ]
     },

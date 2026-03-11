@@ -20,7 +20,7 @@ export default function ConsumersTab() {
   return (
     <div className="tab-container">
       <div className="section-header">
-        <h2>SINK STATUS <span className="text-dim">(CONSUMERS)</span></h2>
+        <h2>DATA CONSUMERS</h2>
       </div>
 
       <div className="status-grid">
@@ -30,7 +30,12 @@ export default function ConsumersTab() {
           return (
             <div className="status-card" key={c._id}>
               <div className="status-header">
-                <h4>{c.id.toUpperCase()}</h4>
+                <h4>
+                  {c.id.toUpperCase()} 
+                  <span className="text-dim" style={{ fontSize: '1em', marginLeft: '8px' }}>
+                    ({c.connector})
+                  </span>
+                </h4>
                 <div className={`pulse-dot ${active ? 'active' : ''}`}></div>
               </div>
 

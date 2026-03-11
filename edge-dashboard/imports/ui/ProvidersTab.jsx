@@ -339,7 +339,7 @@ export default function ProvidersTab() {
             <div className="modal-body">
               <div className="input-group">
                 <label>Broker Address</label>
-                <input type="text" className="discovery-input" placeholder="mqtt://192.168.1.50:1883" disabled={isTesting} value={mqttConfig.brokerUrl} onChange={e => setMqttConfig({...mqttConfig, brokerUrl: e.target.value})}/>
+                <input type="text" className="discovery-input" placeholder="e.g. mqtt://192.168.1.50:1883" disabled={isTesting} value={mqttConfig.brokerUrl} onChange={e => setMqttConfig({...mqttConfig, brokerUrl: e.target.value})}/>
               </div>
               <div className="input-row" style={{ display: 'flex', gap: '10px' }}>
                 <div className="input-group" style={{ flex: 1 }}><label>Username</label><input type="text" className="discovery-input" placeholder="Optional" disabled={isTesting} value={mqttConfig.username} onChange={e => setMqttConfig({...mqttConfig, username: e.target.value})}/></div>

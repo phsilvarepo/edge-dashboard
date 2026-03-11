@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Meteor } from 'meteor/meteor';
 import { useTracker } from 'meteor/react-meteor-data';
-// Import using your actual collection names
 import { 
   Connectors, 
   ProvidersStatus, 
@@ -15,9 +14,11 @@ export default function AddConnector({ onComplete }) {
   const [selectedSensorId, setSelectedSensorId] = useState('');
   const [selectedParserId, setSelectedParserId] = useState('');
   const [selectedConsumerIds, setSelectedConsumerIds] = useState([]);
+  
+  // State to hold dynamic parameters for consumers
+  const [consumerParams, setConsumerParams] = useState({});
 
   const { liveSensors, parsers, consumers, existingConnectors, isLoading } = useTracker(() => {
-    // Matches your publications.js names exactly
     const h1 = Meteor.subscribe('providers_status');
     const h2 = Meteor.subscribe('component_definitions');
     const h3 = Meteor.subscribe('connectors');
@@ -33,17 +34,25 @@ export default function AddConnector({ onComplete }) {
     };
   });
 
-  if (isLoading) return <div className="loading-text">SYNCING ENGINE CORE...</div>;
-
   const handleIdChange = (e) => {
     const rawValue = e.target.value.toUpperCase();
     const filteredValue = rawValue.substring(0, 24).replace(/[^A-Z0-9_]/g, '');
     setId(filteredValue);
-    
-    // Check against existingConnectors instead of pipelines
     const isDuplicate = existingConnectors.some(c => c.name === filteredValue);
     setError(isDuplicate ? 'NAME ALREADY IN USE' : '');
   };
+
+  const handleParamChange = (consumerName, paramName, value) => {
+    setConsumerParams(prev => ({
+      ...prev,
+      [consumerName]: {
+        ...(prev[consumerName] || {}),
+        [paramName]: value
+      }
+    }));
+  };
+
+  if (isLoading) return <div className="loading-text">SYNCING ENGINE CORE...</div>;
 
   const isPipelineValid = id && !error && selectedSensorId && selectedParserId && selectedConsumerIds.length > 0;
 
@@ -53,27 +62,26 @@ export default function AddConnector({ onComplete }) {
 
     const sensor = liveSensors.find(s => s._id === selectedSensorId);
     const parser = parsers.find(p => p._id === selectedParserId);
-    const selectedConsumers = consumers.filter(c => selectedConsumerIds.includes(c._id));
 
     const connectorDoc = {
       name: id,
       enabled: true,
-      // FIX: Force this to match your filename 'mqtt_provider.js'
       provider: 'mqtt_provider', 
-      
       providerOptions: {
         topic: sensor.topic,
         method: sensor.captureMethod,
-        // ADD THIS: Tell the mqtt_provider which sensor data to look for
-        sensorType: sensor.provider, // e.g., "ANALOG" or "ADS1115"
+        sensorType: sensor.provider,
         brokerUrl: sensor.params?.broker || "mqtt://10.0.200.25:1883",
         username: sensor.params?.username || "unparallel",
         password: sensor.params?.pass || "UIuiui123"
       },
       parser: parser.name,
       parserOptions: {},
-      consumers: selectedConsumers.map(c => c.name),
-      consumerOptions: {},
+      consumers: consumers
+        .filter(c => selectedConsumerIds.includes(c._id))
+        .map(c => c.name),
+
+      consumerOptions: consumerParams, 
       createdAt: new Date()
     };
 
@@ -135,24 +143,46 @@ export default function AddConnector({ onComplete }) {
           <label className="input-label">3. Destination Sinks</label>
           <div className="checkbox-list">
             {consumers.map(c => (
-              <label key={c._id} className="tech-checkbox-label">
-                <input 
-                  type="checkbox" 
-                  checked={selectedConsumerIds.includes(c._id)}
-                  onChange={e => {
-                    if(e.target.checked) setSelectedConsumerIds([...selectedConsumerIds, c._id]);
-                    else setSelectedConsumerIds(selectedConsumerIds.filter(x => x !== c._id));
-                  }}
-                /> 
-                {c.label}
-              </label>
+              <div key={c._id} className="consumer-item-wrapper">
+                <label className="tech-checkbox-label">
+                  <input 
+                    type="checkbox" 
+                    checked={selectedConsumerIds.includes(c._id)}
+                    onChange={e => {
+                      if(e.target.checked) setSelectedConsumerIds([...selectedConsumerIds, c._id]);
+                      else setSelectedConsumerIds(selectedConsumerIds.filter(x => x !== c._id));
+                    }}
+                  /> 
+                  {c.label}
+                </label>
+
+                {/* DYNAMIC PARAMETER FIELDS */}
+                {selectedConsumerIds.includes(c._id) && c.parameters && c.parameters.length > 0 && (
+                  <div className="consumer-params-box">
+                    {c.parameters.map(param => (
+                      <div key={param.name} className="param-input-group">
+                        <label className="param-label">{param.label}</label>
+                        <input 
+                          type={param.type || 'text'}
+                          className="tech-input-small"
+                          placeholder={param.label}
+                          value={consumerParams[c.name]?.[param.name] || ''}
+                          onChange={(e) => handleParamChange(c.name, param.name, e.target.value)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </div>
 
-        <button className="btn-create" type="submit" disabled={!isPipelineValid}>
-          Deploy Connector
-        </button>
+        <div className="form-actions">
+          <button className="btn-create" type="submit" disabled={!isPipelineValid}>
+            Deploy Connector
+          </button>
+        </div>
       </form>
     </div>
   );

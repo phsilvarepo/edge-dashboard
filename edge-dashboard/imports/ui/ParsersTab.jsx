@@ -20,7 +20,7 @@ export default function ParsersTab() {
   return (
     <div className="tab-container">
       <div className="section-header">
-        <h2>LOGIC ENGINE <span className="text-dim">(PARSERS)</span></h2>
+        <h2>DATA PARSERS</h2>
       </div>
 
       <div className="status-grid">
@@ -30,8 +30,12 @@ export default function ParsersTab() {
           return (
             <div className="status-card" key={p._id}>
               <div className="status-header">
-                <h4>{p.id.toUpperCase()}</h4>
-                {/* Pulsing dot for visual health check */}
+                <h4>
+                  {p.id.toUpperCase()} 
+                  <span className="text-dim" style={{ fontSize: '1em', marginLeft: '8px' }}>
+                    ({p.connector})
+                  </span>
+                </h4>
                 <div className={`pulse-dot ${healthy ? 'active' : ''}`}></div>
               </div>
 

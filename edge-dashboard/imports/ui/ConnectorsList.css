@@ -1,22 +1,23 @@
-/* imports/ui/ConnectorsList.css */
-
 .btn-add-main {
   background: var(--accent-green);
   color: white;
   border: none;
-  padding: 8px 16px;
+  padding: 8px 16px; 
   border-radius: 6px;
   font-weight: bold;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 12px; 
   transition: filter 0.2s;
+  height: 34px;     
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-add-main:hover {
   filter: brightness(1.2);
 }
 
-/* Connector Flow Visual */
 .connector-flow {
   display: flex;
   align-items: center;
@@ -42,7 +43,6 @@
   font-weight: bold;
 }
 
-/* Modal Styling */
 .modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -74,23 +74,27 @@
   cursor: pointer;
 }
 
-/* Red Delete Action Styles */
 .delete-group {
   display: flex;
   border-radius: 6px;
   overflow: hidden;
-  border: 1px solid #6e2121; /* Dark red border */
+  border: 1px solid #6e2121;
 }
 
 .btn-action {
-  background: #3e1a1a; /* Dark wine background */
+  background: #3e1a1a; 
   color: #ff9999;
   border: none;
-  padding: 8px 14px;
+  padding: 8px 16px; 
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;  
   font-weight: bold;
   transition: all 0.2s;
+  height: 34px;     
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-action:hover {
@@ -99,7 +103,7 @@
 }
 
 .btn-action.btn-danger {
-  background: #da3633 !important; /* Bright active red */
+  background: #da3633 !important;
   color: white;
 }
 
@@ -116,16 +120,17 @@
   background: #f85149;
   color: white;
   border: none;
-  padding: 8px 12px;
+  padding: 8px 16px; 
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 12px;  
   font-weight: bold;
   cursor: pointer;
+  height: 34px;      
 }
 
 .bulk-dropdown {
   position: absolute;
-  top: 45px;
+  top: 40px; 
   left: 0;
   background: #0d1117;
   border: 1px solid #da3633;
@@ -153,21 +158,18 @@
   color: white;
 }
 
-/* Selection State on Cards */
 .status-card.selectable {
   cursor: pointer;
   border-style: dashed;
 }
 
-/* When selected, we switch from dashed to solid and apply the red color */
 .status-card.selected {
-  border-style: solid !important; /* Forces the line to be full/solid */
+  border-style: solid !important; 
   border-color: #f85149 !important;
   background: rgba(248, 81, 73, 0.1);
   transform: scale(0.98);
 }
 
-/* ADDED: Empty State Positioning */
 .empty-state-full {
   display: flex;
   justify-content: center;
@@ -176,7 +178,6 @@
   min-height: 400px;
   width: 100%;
   text-align: center;
-  /* Added delineation styles below */
   border: 2px dashed #30363d; 
   border-radius: 12px;
   background: rgba(0, 0, 0, 0.1);
@@ -190,7 +191,6 @@
   margin: 0;
 }
 
-/* Hide the pulse dot in delete mode */
 .status-card.selectable .pulse-dot {
   display: none !important;
 }
