@@ -10,15 +10,12 @@ export default function AddConnector({ onComplete }) {
   const [selectedSensorId, setSelectedSensorId] = useState('');
   const [selectedParserId, setSelectedParserId] = useState('');
   const [selectedConsumerIds, setSelectedConsumerIds] = useState([]);
-  
-  // State to hold dynamic parameters for consumers
   const [consumerParams, setConsumerParams] = useState({});
 
   const { liveSensors, parsers, consumers, existingConnectors, isLoading } = useTracker(() => {
     const h1 = Meteor.subscribe('providers_status');
     const h2 = Meteor.subscribe('component_definitions');
     const h3 = Meteor.subscribe('connectors');
-    
     const ready = h1.ready() && h2.ready() && h3.ready();
 
     return {
@@ -28,6 +25,32 @@ export default function AddConnector({ onComplete }) {
       existingConnectors: Connectors.find().fetch(),
       isLoading: !ready,
     };
+  });
+
+  // Helper: Find selected objects
+  const sensor = liveSensors.find(s => s._id === selectedSensorId);
+  const parser = parsers.find(p => p._id === selectedParserId);
+
+  // --- STAGE 1: Name & Sensor Validation ---
+  const isSensorValid = id && !error && selectedSensorId;
+  
+  // --- STAGE 2: Parser Dependency Check ---
+  // Logic: Parser must accept the output type of the Sensor
+  const compatibleParsers = parsers.filter(p => {
+    if (!sensor) return false;
+    const sensorOut = (sensor.dataType || 'json').toLowerCase();
+    return p.inputs.some(input => input.toLowerCase() === sensorOut);
+  });
+
+  const isParserValid = isSensorValid && selectedParserId;
+
+  // --- STAGE 3: Consumer Dependency Check ---
+  // Logic: Consumer must accept the output type of the selected Parser
+  const compatibleConsumers = consumers.filter(c => {
+    if (!parser) return false;
+    return parser.outputs.some(pOut => 
+      c.inputs.some(cIn => cIn.toLowerCase() === pOut.toLowerCase())
+    );
   });
 
   const handleIdChange = (e) => {
@@ -41,24 +64,12 @@ export default function AddConnector({ onComplete }) {
   const handleParamChange = (consumerName, paramName, value) => {
     setConsumerParams(prev => ({
       ...prev,
-      [consumerName]: {
-        ...(prev[consumerName] || {}),
-        [paramName]: value
-      }
+      [consumerName]: { ...(prev[consumerName] || {}), [paramName]: value }
     }));
   };
 
-  if (isLoading) return <div className="loading-text">SYNCING ENGINE CORE...</div>;
-
-  const isPipelineValid = id && !error && selectedSensorId && selectedParserId && selectedConsumerIds.length > 0;
-
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!isPipelineValid) return;
-
-    const sensor = liveSensors.find(s => s._id === selectedSensorId);
-    const parser = parsers.find(p => p._id === selectedParserId);
-
     const connectorDoc = {
       name: id,
       enabled: true,
@@ -73,10 +84,7 @@ export default function AddConnector({ onComplete }) {
       },
       parser: parser.name,
       parserOptions: {},
-      consumers: consumers
-        .filter(c => selectedConsumerIds.includes(c._id))
-        .map(c => c.name),
-
+      consumers: consumers.filter(c => selectedConsumerIds.includes(c._id)).map(c => c.name),
       consumerOptions: consumerParams, 
       createdAt: new Date()
     };
@@ -91,6 +99,8 @@ export default function AddConnector({ onComplete }) {
     });
   };
 
+  if (isLoading) return <div className="loading-text">SYNCING ENGINE CORE...</div>;
+
   return (
     <div className="connector-form-container">
       <div className="form-header">
@@ -98,51 +108,49 @@ export default function AddConnector({ onComplete }) {
       </div>
 
       <form onSubmit={handleSubmit}>
+        
         <div className="form-step-wrapper active">
           <label className="input-label">Connector Name</label>
-          <input 
-            className="tech-input"
-            style={error ? { borderColor: '#f85149' } : {}}
-            value={id} 
-            onChange={handleIdChange} 
-            placeholder="E.G. LINE_1_TEMP"
-          />
-        </div>
+          <input className="tech-input" value={id} onChange={handleIdChange} placeholder="E.G. LINE_1_TEMP" />
+          {error && <p className="error-text">{error}</p>}
 
-        <div className="form-step-wrapper active">
-          <label className="input-label">1. Live Data Source</label>
-          <select 
-            className="tech-select"
-            value={selectedSensorId}
-            onChange={e => setSelectedSensorId(e.target.value)}
-          >
+          <label className="input-label" style={{ marginTop: '15px' }}>1. Live Data Source</label>
+          <select className="tech-select" value={selectedSensorId} onChange={e => {
+              setSelectedSensorId(e.target.value);
+              setSelectedParserId('');
+              setSelectedConsumerIds([]);
+          }}>
             <option value="">Select Sensor...</option>
-            {liveSensors.map(s => (
-              <option key={s._id} value={s._id}>{s.label} ({s.parentId})</option>
-            ))}
+            {liveSensors.map(s => <option key={s._id} value={s._id}>{s.label} ({s.parentId})</option>)}
           </select>
         </div>
 
-        <div className="form-step-wrapper active">
-          <label className="input-label">2. Parser Logic</label>
+        <div className={`form-step-wrapper ${isSensorValid ? 'active' : 'locked'}`}>
+          <label className="input-label">2. Data Parser</label>
           <select 
-            className="tech-select"
+            className="tech-select" 
+            disabled={!isSensorValid}
             value={selectedParserId}
-            onChange={e => setSelectedParserId(e.target.value)}
+            onChange={e => {
+                setSelectedParserId(e.target.value);
+                setSelectedConsumerIds([]);
+            }}
           >
             <option value="">Select Parser...</option>
-            {parsers.map(p => <option key={p._id} value={p._id}>{p.label}</option>)}
+            {compatibleParsers.map(p => <option key={p._id} value={p._id}>{p.label}</option>)}
           </select>
         </div>
 
-        <div className="form-step-wrapper active">
-          <label className="input-label">3. Destination Sinks</label>
+        <div className={`form-step-wrapper ${isParserValid ? 'active' : 'locked'}`}>
+          <label className="input-label">3. Data Consumers</label>
           <div className="checkbox-list">
-            {consumers.map(c => (
+            {!isParserValid && <p className="hint-text">Define previous nodes.</p>}
+            {compatibleConsumers.map(c => (
               <div key={c._id} className="consumer-item-wrapper">
                 <label className="tech-checkbox-label">
                   <input 
                     type="checkbox" 
+                    disabled={!isParserValid}
                     checked={selectedConsumerIds.includes(c._id)}
                     onChange={e => {
                       if(e.target.checked) setSelectedConsumerIds([...selectedConsumerIds, c._id]);
@@ -151,9 +159,7 @@ export default function AddConnector({ onComplete }) {
                   /> 
                   {c.label}
                 </label>
-
-                {/* DYNAMIC PARAMETER FIELDS */}
-                {selectedConsumerIds.includes(c._id) && c.parameters && c.parameters.length > 0 && (
+                {selectedConsumerIds.includes(c._id) && c.parameters?.length > 0 && (
                   <div className="consumer-params-box">
                     {c.parameters.map(param => (
                       <div key={param.name} className="param-input-group">
@@ -161,7 +167,6 @@ export default function AddConnector({ onComplete }) {
                         <input 
                           type={param.type || 'text'}
                           className="tech-input-small"
-                          placeholder={param.label}
                           value={consumerParams[c.name]?.[param.name] || ''}
                           onChange={(e) => handleParamChange(c.name, param.name, e.target.value)}
                         />
@@ -175,7 +180,7 @@ export default function AddConnector({ onComplete }) {
         </div>
 
         <div className="form-actions">
-          <button className="btn-create" type="submit" disabled={!isPipelineValid}>
+          <button className="btn-create" type="submit" disabled={!isParserValid || selectedConsumerIds.length === 0}>
             Deploy Connector
           </button>
         </div>

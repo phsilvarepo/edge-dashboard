@@ -15,10 +15,6 @@ Meteor.publish('consumers_status', function () {
   return ConsumersStatus.find();
 });
 
-Meteor.publish('connectors_status', function () {
-  return ConnectorsStatus.find();
-});
-
 Meteor.publish('connectors', function () {
   return Connectors.find();
 });

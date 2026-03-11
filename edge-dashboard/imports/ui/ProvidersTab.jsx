@@ -292,9 +292,35 @@ export default function ProvidersTab() {
               <p><small>METHOD:</small> <strong>{selectedSensor.captureMethod}</strong></p>
               <p><small>TOPIC:</small> <code className="topic-code">{selectedSensor.topic}</code></p>
               
-              <div className="telemetry-box" style={{ background: '#0d1117', padding: '10px', borderRadius: '4px', margin: '15px 0' }}>
-                <h5 style={{ margin: '0 0 10px 0', fontSize: '11px', color: '#8b949e' }}>LIVE PAYLOAD</h5>
-                <pre style={{ fontSize: '12px', color: '#3fb950' }}>{JSON.stringify(selectedSensor.latestData, null, 2)}</pre>
+              {/* UPDATED TELEMETRY BOX WITH SIZE LIMITS */}
+              <div className="telemetry-box" style={{ 
+                background: '#0d1117', 
+                padding: '10px', 
+                borderRadius: '4px', 
+                margin: '15px 0',
+                maxHeight: '200px',    /* Limit height */
+                overflowY: 'auto',     /* Enable scrolling for large matrices */
+                border: '1px solid #30363d'
+              }}>
+                <h5 style={{ 
+                  margin: '0 0 10px 0', 
+                  fontSize: '11px', 
+                  color: '#8b949e', 
+                  position: 'sticky', 
+                  top: 0, 
+                  background: '#0d1117' 
+                }}>
+                  LIVE PAYLOAD
+                </h5>
+                <pre style={{ 
+                  fontSize: '12px', 
+                  color: '#3fb950', 
+                  whiteSpace: 'pre-wrap', 
+                  wordBreak: 'break-all',
+                  margin: 0 
+                }}>
+                  {JSON.stringify(selectedSensor.latestData, null, 2)}
+                </pre>
               </div>
 
               <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>

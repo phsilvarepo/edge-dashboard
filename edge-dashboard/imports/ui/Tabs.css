@@ -25,25 +25,32 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 2px 5px; 
+  gap: 15px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .status-header h4 {
   margin: 0;
-  font-family: monospace;
-  font-size: 1.1rem;
+  white-space: nowrap;     /* Keeps ID on one line */
+  overflow: hidden;        /* Clips text if too long */
+  text-overflow: ellipsis; /* Adds "..." if ID is huge */
+  flex-grow: 1;            /* Allows text to take available space */
 }
 
 .pulse-dot {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: #ff4d4d; /* Default Red */
+  flex-shrink: 0;          /* 🔥 CRITICAL: Prevents warping */
+  background: #f85149;     /* Offline color */
 }
 
 .pulse-dot.active {
   background: #3fb950;
   box-shadow: 0 0 8px #3fb950;
-  animation: pulse-animation 1.5s infinite;
+  /* Keep your existing animation here */
 }
 
 .status-meta {

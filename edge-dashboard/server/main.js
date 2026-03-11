@@ -1,13 +1,11 @@
 // server/main.js
 import { Meteor } from 'meteor/meteor';
 import './publications';
-import '/imports/api/methods';
-import { ComponentDefinitions } from '/imports/api/collections';
-import { ProvidersTemplate } from '/imports/api/collections';
+import { ComponentDefinitions, ProvidersTemplate } from '/imports/api/collections';
+import '/imports/api/methods.js';
 
-// Define the function
 const seedDefinitions = async () => {
-  // Meteor 3.0 uses .countAsync() or .find().countAsync()
+
   const count = await ComponentDefinitions.find().countAsync();
   
   if (count > 0) {
@@ -20,53 +18,45 @@ const seedDefinitions = async () => {
       type: 'provider',
       name: 'mqtt_provider',
       label: 'MQTT Broker',
-      outputs: ['simple_json'],
+      outputs: ['json', 'image_matrix'],
       parameters: []
     },
     {
       type: 'parser',
       name: 'passthrough',
-      label: 'Passthrough (No Change)',
-      inputs: ['simple_json', 'raw_json'],
-      outputs: ['processed_data'],
+      label: 'Passthrough',
+      inputs: ['json'],
+      outputs: ['json'],
       parameters: []
     },
     {
       type: 'parser',
       name: 'convert_Image',
-      label: 'Convert Image',
-      inputs: ['image'],
-      outputs: ['jpg'],
+      label: 'Convert to Image',
+      inputs: ['image_matrix'],
+      outputs: ['jpeg'],
       parameters: []
     },
     {
       type: 'parser',
       name: 'json_to_csv',
       label: 'Convert JSON to CSV',
-      inputs: ['simple_json'],
+      inputs: ['json'],
       outputs: ['csv'],
-      parameters: []
-    },
-    {
-      type: 'parser',
-      name: 'filter_csv',
-      label: 'Filter CSV',
-      inputs: ['simple_json', 'raw_json'],
-      outputs: ['processed_data'],
       parameters: []
     },
     {
       type: 'consumer',
       name: 'console',
       label: 'System Console Log',
-      inputs: ['processed_data'],
+      inputs: ['json'],
       parameters: []
     },
     {
       type: 'consumer',
       name: 'minioBucket',
       label: 'MinIO Bucket',
-      inputs: ['processed_data'],
+      inputs: ['csv', 'json', 'jpeg'],
       parameters: [
         { name: 'minIO_url', type: 'text', label: 'MinIO URL' },
         { name: 'minIO_username', type: 'text', label: 'MinIO username' },
@@ -78,7 +68,7 @@ const seedDefinitions = async () => {
       type: 'consumer',
       name: 'mqtt',
       label: 'MQTT Forwarder (Publisher)',
-      inputs: ['processed_data'],
+      inputs: ['json'],
       parameters: [
         { name: 'mqtt_url', type: 'text', label: 'Remote MQTT URL' },
         { name: 'mqtt_topic', type: 'text', label: 'Base Topic' },
@@ -98,27 +88,19 @@ const seedDefinitions = async () => {
 Meteor.startup(async () => {
   console.log('Server starting...');
   
-  // Seed general definitions
   await seedDefinitions();
-  
-  // Seed specific Provider Blueprints (Templates)
-  // Fix: Use countAsync() directly on the cursor
+
   const templateCount = await ProvidersTemplate.find().countAsync();
 
   if (templateCount === 0) {
     console.log("🌱 Seeding ProvidersTemplate...");
-
-    // Inside your Meteor.startup block in server/main.js
-    // Inside your Meteor.startup block
-  
-    // server/main.js - inside Meteor.startup
 
     const templates = [
       {
         name: 'ADS1115',
         label: 'Precision ADC (ADS1115)',
         docs: 'https://tasmota.github.io/docs/ADS1115/',
-        supportedMethods: ['MQTT_TASMOTA', 'MQTT_SHELLY'],
+        supportedMethods: ['MQTT_TASMOTA'],
         outputType: 'json',
         description: '4-Channel 16-bit Analog to Digital Converter for high-accuracy voltage sensing.'
       },
@@ -126,7 +108,7 @@ Meteor.startup(async () => {
         name: 'ANALOG',
         label: 'Analog Input (A0/A1)',
         docs: 'https://tasmota.github.io/docs/GPIO-Definitions/#analog-inputs',
-        supportedMethods: ['MQTT_TASMOTA', 'MQTT_SHELLY'],
+        supportedMethods: ['MQTT_TASMOTA',],
         outputType: 'json',
         description: 'Generic analog voltage monitoring via onboard ADC pins.'
       },
@@ -171,16 +153,15 @@ Meteor.startup(async () => {
         description: 'True CO2, Temperature, and Humidity sensor using photoacoustic technology.'
       },
       {
-        name: 'SHELLY_UNI',
-        label: 'Shelly Uni System',
+        name: 'THERMAL CAMERA',
+        label: 'Thermal Camera',
         docs: 'https://shelly-api-docs.shelly.cloud/gen1/#shelly-uni',
         supportedMethods: ['MQTT_SHELLY'],
-        outputType: 'json',
-        description: 'System-level telemetry for the Shelly Uni Smart Implant.'
+        outputType: 'image_matrix',
+        description: 'Thermal camera using the Shelly firmware.'
       }
     ];
 
-    // Use upsert so it updates existing ones and adds new ones
     for (const t of templates) {
       await ProvidersTemplate.upsertAsync({ name: t.name }, { $set: t });
     }
