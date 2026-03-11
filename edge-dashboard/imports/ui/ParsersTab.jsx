@@ -2,7 +2,7 @@ import React from 'react';
 import { Meteor } from 'meteor/meteor';
 import { useTracker } from 'meteor/react-meteor-data';
 import { ParsersStatus } from '/imports/api/collections';
-import './Tabs.css'; // Reusing the same CSS for consistency
+import './Tabs.css';
 
 export default function ParsersTab() {
   const parsers = useTracker(() => {
@@ -30,9 +30,9 @@ export default function ParsersTab() {
           return (
             <div className="status-card" key={p._id}>
               <div className="status-header">
-                <h4>
+                <h4 style={{ color: '#58a6ff' }}>
                   {p.id.toUpperCase()} 
-                  <span className="text-dim" style={{ fontSize: '1em', marginLeft: '8px' }}>
+                  <span className="text-dim" style={{ fontSize: '1em', marginLeft: '8px', color: '#58a6ff'}}>
                     ({p.connector})
                   </span>
                 </h4>
@@ -62,8 +62,8 @@ export default function ParsersTab() {
         })}
 
         {parsers.length === 0 && (
-          <div className="hint" style={{ gridColumn: '1/-1', textAlign: 'center', padding: '40px' }}>
-            NO ACTIVE PARSERS DETECTED IN NODE
+          <div className="hint" style={{ gridColumn: '1/-1', textAlign: 'center'}}>
+            NO PARSERS ACTIVE
           </div>
         )}
       </div>

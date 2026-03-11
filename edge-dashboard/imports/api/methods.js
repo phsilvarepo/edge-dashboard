@@ -1,7 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import mqtt from 'mqtt';
-import { Connectors, ProvidersStatus, ProvidersTemplate } from './collections';
+import { Connectors, ParsersStatus, ProvidersStatus, ProvidersTemplate } from './collections';
 
 let globalMqttClient = null;
 let isDiscoveryActive = false; 
@@ -296,6 +296,11 @@ Meteor.methods({
 
   async 'connectors.removeAll'() {
     return await Connectors.removeAsync({});
+  },
+
+  'parsers.removeByConnector'(connectorName) {
+    check(connectorName, String);
+    return ParsersStatus.remove({ connector: connectorName });
   },
 
 });

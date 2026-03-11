@@ -186,7 +186,7 @@ export default function ProvidersTab() {
 
         {providers.length === 0 && (
           <div className="hint" style={{ gridColumn: '1/-1', textAlign: 'center', padding: '40px', border: '1px dashed #30363d' }}>
-            NO PROVIDER SIGNALS DETECTED. CLICK CONNECT BROKER TO SCAN NETWORK.
+            NO PROVIDERS DETECTED. CLICK AUTO-DISCOVERY TO FIND PROVIDERS.
           </div>
         )}
       </div>

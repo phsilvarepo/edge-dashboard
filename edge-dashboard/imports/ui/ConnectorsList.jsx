@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Meteor } from 'meteor/meteor';
 import { useTracker } from 'meteor/react-meteor-data';
-// IMPORT the correct collection
 import { Connectors } from '/imports/api/collections';
 import AddConnector from './AddConnector';
 import './Tabs.css'; 
@@ -34,10 +33,22 @@ export default function ConnectorsList() {
   };
 
   const handleDeleteSelected = () => {
-    if (confirm(`Purge ${selectedIds.length} connector(s)?`)) {
+    if (confirm(`Purge ${selectedIds.length} connector(s) and associated parsers?`)) {
       selectedIds.forEach(id => {
-        Meteor.call('pipeline.toggle', id, false);
-        Meteor.call('connectors.remove', id);
+        // 1. Get the connector doc first to find its NAME
+        const connectorDoc = connectors.find(c => c._id === id);
+        
+        if (connectorDoc) {
+          // 2. Stop the logic
+          Meteor.call('pipeline.toggle', id, false);
+          
+          // 3. Remove the parser associated with this connector NAME
+          // We use the 'connector' field from your db.parsers_status structure
+          Meteor.call('parsers.removeByConnector', connectorDoc.name);
+
+          // 4. Remove the connector itself
+          Meteor.call('connectors.remove', id);
+        }
       });
       setSelectedIds([]);
       setDeleteMode(false);

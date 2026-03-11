@@ -1,11 +1,7 @@
 import React, { useState } from 'react';
 import { Meteor } from 'meteor/meteor';
 import { useTracker } from 'meteor/react-meteor-data';
-import { 
-  Connectors, 
-  ProvidersStatus, 
-  ComponentDefinitions 
-} from '/imports/api/collections';
+import { Connectors, ProvidersStatus, ComponentDefinitions } from '/imports/api/collections';
 import './AddConnectorUI.css'; 
 
 export default function AddConnector({ onComplete }) {

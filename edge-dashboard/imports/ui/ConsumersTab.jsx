@@ -30,9 +30,9 @@ export default function ConsumersTab() {
           return (
             <div className="status-card" key={c._id}>
               <div className="status-header">
-                <h4>
+                <h4 style={{ color: '#58a6ff' }}>
                   {c.id.toUpperCase()} 
-                  <span className="text-dim" style={{ fontSize: '1em', marginLeft: '8px' }}>
+                  <span className="text-dim" style={{ fontSize: '1em', marginLeft: '8px', color: '#58a6ff'}}>
                     ({c.connector})
                   </span>
                 </h4>
@@ -54,7 +54,9 @@ export default function ConsumersTab() {
             </div>
           );
         })}
-        {consumers.length === 0 && <p className="hint">Waiting for consumer signals...</p>}
+        {consumers.length === 0 && <p className="hint" style={{ gridColumn: '1/-1', textAlign: 'center' }}>
+          NO CONSUMERS FOUND
+        </p>}
       </div>
     </div>
   );
