@@ -20,13 +20,18 @@ const PARSE_STRATEGY = {
   MQTT_SHELLY: {
     getDeviceId: (input) => {
       const parts = input.split('/');
+      // Logic: Find the part that identifies the device
       return parts.find(p => p.toLowerCase().includes('thermal') || p.toLowerCase().includes('shelly')) || parts[2] || parts[1] || input;
     },
     getSearchArea: (payload) => {
-      // If it's a raw array, we wrap it in IMG as a fallback
       return Array.isArray(payload) ? { IMG: payload } : payload;
     },
     fixTopic: (input) => {
+      // Ensure Shelly Thermal topics always end in /IMG for the handler to trigger
+      const clean = input.toUpperCase();
+      if (clean.startsWith('HS4U/THERMAL/') && !clean.endsWith('/IMG')) {
+        return `${input}/IMG`;
+      }
       return input;
     }
   }
@@ -42,46 +47,30 @@ const sanitizeKeys = (obj) => {
   return newObj;
 };
 
-/**
- * MAIN HANDLER: Processes incoming MQTT packets with Heavy Logging
- */
 const handleMqttMessage = async (topic, message) => {
   try {
     const rawMessage = message.toString();
     const top = topic.toUpperCase();
     const parts = topic.split('/');
 
-    // 1. FAST EXIT: Ignore LWT/Status noise
     if (top.endsWith('/LWT') || top.endsWith('/STATE')) return;
 
     let payload;
-    try {
-      payload = JSON.parse(rawMessage);
-    } catch (e) {
-      payload = rawMessage; 
-    }
+    try { payload = JSON.parse(rawMessage); } catch (e) { payload = rawMessage; }
 
-    // --- CASE A: THERMAL CAMERA (Direct Topic Mapping) ---
+    // --- CASE A: THERMAL CAMERA (SHELLY) ---
     if (top.startsWith('HS4U/THERMAL/')) {
-      const sensorKey = parts[3]; // e.g., "IMG", "CMD", "LWT"
+      const sensorKey = parts[3]; // e.g., "IMG"
+      if (!sensorKey || sensorKey.toUpperCase() !== 'IMG') return;
 
-      // 🎯 STRICT FILTER: Only allow "IMG" topics to be processed
-      if (!sensorKey || sensorKey.toUpperCase() !== 'IMG') {
-        // console.log(`⏩ Ignoring thermal sub-topic: ${sensorKey}`);
-        return;
-      }
-
-      const deviceId = parts[2] || 'THERMAL_DEV';
+      const deviceId = PARSE_STRATEGY.MQTT_SHELLY.getDeviceId(topic);
       const shortId = deviceId.replace(/thermal_|shelly_/gi, '').toUpperCase();
-      const uniqueId = `${shortId}_IMG`.toUpperCase(); // Hardcoded to IMG suffix
+      
+      // 🎯 CRITICAL: ID must match the one created by the Wizard
+      const uniqueId = `${shortId}_THERMAL CAMERA`.toUpperCase(); 
 
-      // Check if we already know this camera OR if we are currently searching (Discovery)
       const existing = await ProvidersStatus.findOneAsync(uniqueId);
       if (!existing && !isDiscoveryActive) return;
-
-      if (isDiscoveryActive && !existing) {
-        console.log(`✨ Discovery: Registering New Thermal Sensor [${uniqueId}]`);
-      }
 
       const cleanData = sanitizeKeys(payload);
 
@@ -91,7 +80,7 @@ const handleMqttMessage = async (topic, message) => {
           $set: {
             id: uniqueId,
             provider: 'THERMAL CAMERA',
-            label: `Thermal Matrix`,
+            label: existing ? existing.label : `Thermal Matrix`,
             captureMethod: 'MQTT_SHELLY',
             topic: topic,
             lastRun: new Date(),
@@ -104,27 +93,24 @@ const handleMqttMessage = async (topic, message) => {
       return; 
     }
 
-    // --- CASE B: TASMOTA (JSON Key Search via Templates) ---
+    // --- CASE B: TASMOTA ---
     if (top.startsWith('HS4U/TELE/')) {
       if (!top.endsWith('/SENSOR')) return;
 
-      const deviceId = parts[2] || 'TASMOTA_DEV';
+      const deviceId = PARSE_STRATEGY.MQTT_TASMOTA.getDeviceId(topic);
       const shortId = deviceId.replace(/tasmota_/gi, '').toUpperCase();
       
       const strategy = PARSE_STRATEGY.MQTT_TASMOTA;
       const searchArea = strategy.getSearchArea(payload);
-      const keysToProcess = Object.keys(searchArea);
 
-      for (const key of keysToProcess) {
+      for (const key of Object.keys(searchArea)) {
         if (['Time', 'TempUnit'].includes(key)) continue;
 
-        // Tasmota MUST have a template to be valid
         const template = await ProvidersTemplate.findOneAsync({ name: key });
         if (!template) continue;
         
         const uniqueId = `${shortId}_${key}`.toUpperCase();
         const existing = await ProvidersStatus.findOneAsync(uniqueId);
-        
         if (!existing && !isDiscoveryActive) continue;
 
         await ProvidersStatus.upsertAsync(
@@ -153,62 +139,38 @@ const handleMqttMessage = async (topic, message) => {
 
 Meteor.methods({
   async 'providers.createInstance'({ templateId, method, params }) {
-    console.log(`\n🚀 MANUAL LINK: Method=${method} | Template=${templateId}`);
-    
     check(templateId, String);
     check(method, String);
     check(params, Object);
 
     const template = await ProvidersTemplate.findOneAsync(templateId);
-    if (!template) throw new Meteor.Error('not-found', 'Blueprint not found');
+    if (!template) throw new Meteor.Error('not-found', 'Template not found');
 
     const strategy = PARSE_STRATEGY[method];
-    if (!strategy) throw new Meteor.Error('invalid-method', 'Unknown Method');
-
-    const inputVal = params.topic || params.deviceId;
-    const computedTopic = strategy.fixTopic(inputVal);
+    const computedTopic = strategy.fixTopic(params.topic || params.deviceId);
+    const rawDeviceId = strategy.getDeviceId(computedTopic);
+    const parentId = rawDeviceId.replace(/tasmota_|shelly_|thermal_/gi, '').toUpperCase();
     
-    const rawId = strategy.getDeviceId(computedTopic);
-    const parentId = rawId.replace(/tasmota_|shelly_|thermal_/gi, '').toUpperCase();
+    // 🎯 MATCHING ID GENERATION
     const instanceId = `${parentId}_${template.name}`.toUpperCase();
 
-    console.log(`   📍 Computed Topic: ${computedTopic}`);
-    console.log(`   🆔 Instance ID: ${instanceId}`);
-
     const setupClient = (client) => {
-        console.log(`   📡 Subscribing to: ${computedTopic}`);
-        client.subscribe(computedTopic, (err) => {
-            if (err) console.error("   ❌ Subscription Error:", err);
-            else console.log("   ✔️ Subscription Successful");
-        });
-        
+        client.subscribe(computedTopic);
         if (method === 'MQTT_TASMOTA') {
-          const pokeTopic = `HS4U/cmnd/${rawId}/status`;
-          console.log(`   📤 Poking Tasmota: ${pokeTopic}`);
-          client.publish(pokeTopic, '8');
+          client.publish(`HS4U/cmnd/${rawDeviceId}/status`, '8');
         }
     };
 
     if (!globalMqttClient || !globalMqttClient.connected) {
-      if (params.broker) {
-        console.log(`   🔌 Opening new connection to ${params.broker}...`);
-        globalMqttClient = mqtt.connect(params.broker, {
-          username: params.username || '',
-          password: params.pass || '', 
-          connectTimeout: 5000,
-        });
-        
-        globalMqttClient.on('connect', () => {
-          console.log("   🟢 MQTT Connected");
-          setupClient(globalMqttClient);
-        });
-
-        globalMqttClient.on('message', (topic, message) => { handleMqttMessage(topic, message); });
-        globalMqttClient.on('error', (err) => console.error("   ❌ MQTT Socket Error:", err.message));
-      }
+      globalMqttClient = mqtt.connect(params.broker, {
+        username: params.username || '',
+        password: params.pass || '',
+        connectTimeout: 5000,
+      });
+      globalMqttClient.on('connect', () => setupClient(globalMqttClient));
+      globalMqttClient.on('message', (t, m) => handleMqttMessage(t, m));
     } else {
-        console.log("   ♻️ Using existing MQTT connection.");
-        setupClient(globalMqttClient);
+      setupClient(globalMqttClient);
     }
 
     return await ProvidersStatus.upsertAsync(
@@ -223,10 +185,9 @@ Meteor.methods({
           topic: computedTopic,
           params: params,
           lastRun: new Date(),
-          latestData: { status: "Linked, awaiting broadcast..." },
+          latestData: { status: "Linked, awaiting data..." },
           parentId: parentId,
-          docs: template.docs,
-          dataType: template.outputType
+          dataType: template.outputType || 'json'
         }
       }
     );
@@ -234,38 +195,18 @@ Meteor.methods({
 
   'providers.autoDiscover'(config) {
     check(config, { brokerUrl: String, username: Match.Optional(String), password: Match.Optional(String) });
-    if (Meteor.isClient) return;
-
     return new Promise((resolve) => {
-      console.log(`\n🔍 AUTODISCOVERY STARTING...`);
       if (globalMqttClient) globalMqttClient.end(true);
-
-      globalMqttClient = mqtt.connect(config.brokerUrl, {
-        username: config.username || '',
-        password: config.password || '',
-        connectTimeout: 5000,
-      });
+      globalMqttClient = mqtt.connect(config.brokerUrl, { ...config, connectTimeout: 5000 });
 
       globalMqttClient.on('connect', () => {
         isDiscoveryActive = true;
-        const scanTopics = ['HS4U/tele/#', 'HS4U/thermal/#'];
-        console.log(`   📡 Subscribed to scan topics: ${scanTopics.join(', ')}`);
-        globalMqttClient.subscribe(scanTopics);
-        globalMqttClient.publish('HS4U/cmnd/tasmota/backlog', 'Status 8');
-        globalMqttClient.on('message', (topic, message) => { handleMqttMessage(topic, message); });
-        
-        Meteor.setTimeout(() => { 
-            isDiscoveryActive = false; 
-            console.log("   ⏱️ Discovery period ended.");
-        }, 15000);
+        globalMqttClient.subscribe(['HS4U/tele/#', 'HS4U/thermal/#']);
+        globalMqttClient.on('message', (t, m) => handleMqttMessage(t, m));
+        Meteor.setTimeout(() => { isDiscoveryActive = false; }, 15000);
         resolve(true);
       });
-
-      globalMqttClient.on('error', (err) => {
-        console.error("   ❌ Discovery Broker Error:", err.message);
-        resolve(false);
-      });
-
+      globalMqttClient.on('error', () => resolve(false));
       setTimeout(() => resolve(false), 5500);
     });
   },
