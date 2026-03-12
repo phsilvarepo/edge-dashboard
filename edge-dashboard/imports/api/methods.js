@@ -1,7 +1,15 @@
 import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import mqtt from 'mqtt';
-import { Connectors, ParsersStatus, ProvidersStatus, ProvidersTemplate } from './collections';
+import * as Minio from 'minio'; // Ensure 'npm install minio' has been run
+import { 
+  Connectors, 
+  ParsersStatus, 
+  ProvidersStatus, 
+  ProvidersTemplate, 
+  ConsumerClients,
+  ConsumersStatus 
+} from './collections';
 
 let globalMqttClient = null;
 let isDiscoveryActive = false; 
@@ -20,14 +28,12 @@ const PARSE_STRATEGY = {
   MQTT_SHELLY: {
     getDeviceId: (input) => {
       const parts = input.split('/');
-      // Logic: Find the part that identifies the device
       return parts.find(p => p.toLowerCase().includes('thermal') || p.toLowerCase().includes('shelly')) || parts[2] || parts[1] || input;
     },
     getSearchArea: (payload) => {
       return Array.isArray(payload) ? { IMG: payload } : payload;
     },
     fixTopic: (input) => {
-      // Ensure Shelly Thermal topics always end in /IMG for the handler to trigger
       const clean = input.toUpperCase();
       if (clean.startsWith('HS4U/THERMAL/') && !clean.endsWith('/IMG')) {
         return `${input}/IMG`;
@@ -58,15 +64,12 @@ const handleMqttMessage = async (topic, message) => {
     let payload;
     try { payload = JSON.parse(rawMessage); } catch (e) { payload = rawMessage; }
 
-    // --- CASE A: THERMAL CAMERA (SHELLY) ---
     if (top.startsWith('HS4U/THERMAL/')) {
-      const sensorKey = parts[3]; // e.g., "IMG"
+      const sensorKey = parts[3]; 
       if (!sensorKey || sensorKey.toUpperCase() !== 'IMG') return;
 
       const deviceId = PARSE_STRATEGY.MQTT_SHELLY.getDeviceId(topic);
       const shortId = deviceId.replace(/thermal_|shelly_/gi, '').toUpperCase();
-      
-      // 🎯 CRITICAL: ID must match the one created by the Wizard
       const uniqueId = `${shortId}_THERMAL CAMERA`.toUpperCase(); 
 
       const existing = await ProvidersStatus.findOneAsync(uniqueId);
@@ -93,7 +96,6 @@ const handleMqttMessage = async (topic, message) => {
       return; 
     }
 
-    // --- CASE B: TASMOTA ---
     if (top.startsWith('HS4U/TELE/')) {
       if (!top.endsWith('/SENSOR')) return;
 
@@ -151,7 +153,6 @@ Meteor.methods({
     const rawDeviceId = strategy.getDeviceId(computedTopic);
     const parentId = rawDeviceId.replace(/tasmota_|shelly_|thermal_/gi, '').toUpperCase();
     
-    // 🎯 MATCHING ID GENERATION
     const instanceId = `${parentId}_${template.name}`.toUpperCase();
 
     const setupClient = (client) => {
@@ -213,7 +214,6 @@ Meteor.methods({
 
   async 'providers.removeInstance'(instanceId) {
     check(instanceId, String);
-    console.log(`🗑️ Removing instance: ${instanceId}`);
     return await ProvidersStatus.removeAsync(instanceId);
   },
 
@@ -233,8 +233,116 @@ Meteor.methods({
 
   async 'parsers.removeByConnector'(connectorName) {
     check(connectorName, String);
-    console.log(`🧹 Purging parser status for connector: ${connectorName}`);
     return await ParsersStatus.removeAsync({ connector: connectorName });
   },
 
+  async 'consumers.saveClient'({ templateName, params, label }) {
+    check(templateName, String);
+    check(params, Object);
+    check(label, String);
+    const clientConfigId = `${templateName}_${label.replace(/\s+/g, '_')}`.toUpperCase();
+    return await ConsumerClients.upsertAsync(
+      { _id: clientConfigId },
+      { $set: { id: clientConfigId, templateName, label, params, updatedAt: new Date() } }
+    );
+  },
+
+  async 'consumers.removeClient'(clientId) {
+    check(clientId, String);
+    return await ConsumerClients.removeAsync(clientId);
+  },
+
+  async 'consumers.removeByConnector'(connectorName) {
+    check(connectorName, String);
+    return await ConsumersStatus.removeAsync({ connector: connectorName });
+  },
+
+  async 'consumers.testConnection'({ type, params }) {
+    check(type, String);
+    check(params, Object);
+
+    const runTest = () => new Promise((resolve) => {
+      // 1. Setup a global timeout to catch "hanging" connections (wrong ports)
+      const timeoutId = setTimeout(() => {
+        resolve({ success: false, message: "Connection timed out. Check your address and port." });
+      }, 5000); // 5 second limit
+
+      const endTest = (result) => {
+        clearTimeout(timeoutId);
+        resolve(result);
+      };
+
+      // --- MQTT CONNECTION TEST ---
+      if (type.includes('mqtt')) {
+        const client = mqtt.connect(params.brokerUrl || params.mqtt_url, {
+          username: params.username || params.mqtt_username,
+          password: params.password || params.mqtt_password,
+          connectTimeout: 4000,
+          reconnectPeriod: 0,
+        });
+
+        client.on('connect', () => { 
+          client.end(); 
+          endTest({ success: true }); 
+        });
+
+        client.on('error', (err) => { 
+          client.end(); 
+          if (err.code === 'ENOTFOUND') endTest({ success: false, message: "Can't find that Broker address." });
+          else if (err.code === 'ECONNREFUSED') endTest({ success: false, message: "Connection refused (check port)." });
+          else endTest({ success: false, message: "MQTT Connection Failed." });
+        });
+      } 
+
+      // --- MINIO / S3 CONNECTION TEST ---
+      else if (type.includes('minio') || type.includes('s3')) {
+        try {
+          const endPoint = params.minIO_url || params.endPoint || '';
+          if (!endPoint) return endTest({ success: false, message: "Endpoint URL is required." });
+
+          const MinioClient = Minio.Client || Minio;
+          if (typeof MinioClient !== 'function') {
+            throw new Error("Minio library initialization failed.");
+          }
+
+          const minioClient = new MinioClient({
+            endPoint: endPoint.replace('http://', '').replace('https://', ''),
+            port: parseInt(params.minIO_port || params.port) || 9000,
+            useSSL: params.useSSL === 'true' || params.useSSL === true || false,
+            accessKey: params.minIO_username || params.accessKey,
+            secretKey: params.minIO_password || params.secretKey
+          });
+
+          minioClient.listBuckets((err) => {
+            if (err) {
+              if (err.code === 'ENOTFOUND') {
+                endTest({ success: false, message: "Can't find that address. Check the URL/Host." });
+              } 
+              else if (err.code === 'InvalidAccessKeyId' || err.code === 'AccessDenied') {
+                endTest({ success: false, message: "Can't find that username." });
+              } 
+              else if (err.code === 'SignatureDoesNotMatch') {
+                endTest({ success: false, message: "Invalid password." });
+              } 
+              else if (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET') {
+                endTest({ success: false, message: "Connection refused. Check if the port is correct." });
+              } 
+              else {
+                endTest({ success: false, message: `Storage Error: ${err.code}` });
+              }
+            } else {
+              endTest({ success: true });
+            }
+          });
+        } catch (e) {
+          endTest({ success: false, message: `Configuration error: ${e.message}` });
+        }
+      } 
+      else {
+        endTest({ success: true });
+      }
+    });
+
+    return await runTest();
+  }
 });

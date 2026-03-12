@@ -38,11 +38,16 @@ export default function ConnectorsList() {
         const connectorDoc = connectors.find(c => c._id === id);
         
         if (connectorDoc) {
-
+          // 1. Stop the processing engine
           Meteor.call('pipeline.toggle', id, false);
         
+          // 2. Remove Parser live status entries
           Meteor.call('parsers.removeByConnector', connectorDoc.name);
 
+          // 🎯 3. Remove Consumer live status entries (The missing piece)
+          Meteor.call('consumers.removeByConnector', connectorDoc.name);
+
+          // 4. Remove the connector definition itself
           Meteor.call('connectors.remove', id);
         }
       });
@@ -54,9 +59,10 @@ export default function ConnectorsList() {
   const handlePurgeAll = () => {
     if (confirm("🚨 PURGE ALL CONNECTORS? This will stop and remove everything.")) {
       connectors.forEach(c => {
-   
         Meteor.call('pipeline.toggle', c._id, false);
         Meteor.call('parsers.removeByConnector', c.name); 
+        // 🎯 Also clear consumers during purge all
+        Meteor.call('consumers.removeByConnector', c.name);
         Meteor.call('connectors.remove', c._id);
       });
       setShowDropdown(false);
@@ -161,7 +167,7 @@ export default function ConnectorsList() {
         <div className="empty-state-full">
           <h3>No deployments active</h3>
           <button className="btn-add-main" style={{ marginTop: '20px' }} onClick={() => setModalOpen(true)}>
-            DEPLOY FIRST SENSOR
+            DEPLOY FIRST PIPELINE
           </button>
         </div>
       )}

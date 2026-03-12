@@ -16,12 +16,12 @@ const CAPTURE_CONFIGS = {
     ]
   },
   MQTT_SHELLY: {
-    label: 'Generic / Thermal / Shelly', // Updated Label
+    label: 'Shelly MQTT',
     fields: [
       { id: 'broker', label: 'Broker Address', placeholder: 'eg: mqtt://10.0.200.25:1883', type: 'text' },
       { id: 'username', label: 'Broker Username', placeholder: 'Optional', type: 'text' },
       { id: 'pass', label: 'Broker Password', placeholder: 'Optional', type: 'text' },
-      { id: 'topic', label: 'Full MQTT Topic', placeholder: 'eg: HS4U/thermal/thermal_CD4557/IMG', type: 'text' } // Clarified Placeholder
+      { id: 'topic', label: 'Full MQTT Topic', placeholder: 'eg: HS4U/thermal/thermal_CD4557/IMG', type: 'text' }
     ]
   }
 };
@@ -196,7 +196,6 @@ export default function ProvidersTab() {
       {/* --- PROVIDER TEMPLATES SECTION --- */}
       <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>PROVIDER TEMPLATES</h2>
-        <button className="btn-secondary" style={{ fontSize: '12px' }}>+ NEW TEMPLATE</button>
       </div>
       
       <div className="template-list" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>

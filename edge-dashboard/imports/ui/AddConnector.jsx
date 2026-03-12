@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Meteor } from 'meteor/meteor';
 import { useTracker } from 'meteor/react-meteor-data';
-import { Connectors, ProvidersStatus, ComponentDefinitions } from '/imports/api/collections';
+// Added ConsumerClients to imports
+import { Connectors, ProvidersStatus, ComponentDefinitions, ConsumerClients } from '/imports/api/collections';
 import './AddConnectorUI.css'; 
 
 export default function AddConnector({ onComplete }) {
@@ -12,30 +13,28 @@ export default function AddConnector({ onComplete }) {
   const [selectedConsumerIds, setSelectedConsumerIds] = useState([]);
   const [consumerParams, setConsumerParams] = useState({});
 
-  const { liveSensors, parsers, consumers, existingConnectors, isLoading } = useTracker(() => {
+  const { liveSensors, parsers, consumers, managedClients, existingConnectors, isLoading } = useTracker(() => {
     const h1 = Meteor.subscribe('providers_status');
     const h2 = Meteor.subscribe('component_definitions');
     const h3 = Meteor.subscribe('connectors');
-    const ready = h1.ready() && h2.ready() && h3.ready();
+    const h4 = Meteor.subscribe('consumer_clients'); 
+    const ready = h1.ready() && h2.ready() && h3.ready() && h4.ready();
 
     return {
       liveSensors: ProvidersStatus.find().fetch(),
       parsers: ComponentDefinitions.find({ type: 'parser' }).fetch(),
       consumers: ComponentDefinitions.find({ type: 'consumer' }).fetch(),
+      managedClients: ConsumerClients.find().fetch(), 
       existingConnectors: Connectors.find().fetch(),
       isLoading: !ready,
     };
   });
 
-  // Helper: Find selected objects
   const sensor = liveSensors.find(s => s._id === selectedSensorId);
   const parser = parsers.find(p => p._id === selectedParserId);
 
-  // --- STAGE 1: Name & Sensor Validation ---
   const isSensorValid = id && !error && selectedSensorId;
   
-  // --- STAGE 2: Parser Dependency Check ---
-  // Logic: Parser must accept the output type of the Sensor
   const compatibleParsers = parsers.filter(p => {
     if (!sensor) return false;
     const sensorOut = (sensor.dataType || 'json').toLowerCase();
@@ -44,8 +43,6 @@ export default function AddConnector({ onComplete }) {
 
   const isParserValid = isSensorValid && selectedParserId;
 
-  // --- STAGE 3: Consumer Dependency Check ---
-  // Logic: Consumer must accept the output type of the selected Parser
   const compatibleConsumers = consumers.filter(c => {
     if (!parser) return false;
     return parser.outputs.some(pOut => 
@@ -66,6 +63,20 @@ export default function AddConnector({ onComplete }) {
       ...prev,
       [consumerName]: { ...(prev[consumerName] || {}), [paramName]: value }
     }));
+  };
+
+  const handleSelectManagedClient = (consumerName, clientId) => {
+    if (!clientId) {
+        setConsumerParams(prev => ({ ...prev, [consumerName]: {} }));
+        return;
+    }
+    const client = managedClients.find(c => c._id === clientId);
+    if (client) {
+        setConsumerParams(prev => ({
+            ...prev,
+            [consumerName]: { ...client.params, _managedClientId: client._id }
+        }));
+    }
   };
 
   const handleSubmit = (e) => {
@@ -99,6 +110,13 @@ export default function AddConnector({ onComplete }) {
     });
   };
 
+  // UI Helper for the grayed-out effect
+  const getStageStyle = (isActive) => ({
+    color: isActive ? '#c9d1d9' : '#8b949e',
+    opacity: isActive ? 1 : 0.6,
+    transition: 'all 0.3s ease'
+  });
+
   if (isLoading) return <div className="loading-text">SYNCING ENGINE CORE...</div>;
 
   return (
@@ -109,6 +127,7 @@ export default function AddConnector({ onComplete }) {
 
       <form onSubmit={handleSubmit}>
         
+        {/* STEP 1: Always Active */}
         <div className="form-step-wrapper active">
           <label className="input-label">Connector Name</label>
           <input className="tech-input" value={id} onChange={handleIdChange} placeholder="E.G. LINE_1_TEMP" />
@@ -120,62 +139,88 @@ export default function AddConnector({ onComplete }) {
               setSelectedParserId('');
               setSelectedConsumerIds([]);
           }}>
-            <option value="">Select Sensor...</option>
+            <option value="">{liveSensors.length > 0 ? "Select Sensor..." : "No Available Sensors"}</option>
             {liveSensors.map(s => <option key={s._id} value={s._id}>{s.label} ({s.parentId})</option>)}
           </select>
         </div>
 
-        <div className={`form-step-wrapper ${isSensorValid ? 'active' : 'locked'}`}>
-          <label className="input-label">2. Data Parser</label>
+        {/* STEP 2: Grayed out until Step 1 is valid */}
+        <div className={`form-step-wrapper ${isSensorValid ? 'active' : 'locked'}`} style={getStageStyle(isSensorValid)}>
+          <label className="input-label" style={{ color: 'inherit' }}>2. Data Parser</label>
           <select 
             className="tech-select" 
-            disabled={!isSensorValid}
+            style={{ color: 'inherit' }} // Force the text color to follow the parent (gray when locked)
+            disabled={!isSensorValid || compatibleParsers.length === 0}
             value={selectedParserId}
             onChange={e => {
                 setSelectedParserId(e.target.value);
                 setSelectedConsumerIds([]);
             }}
           >
-            <option value="">Select Parser...</option>
+            <option value="">{compatibleParsers.length > 0 ? "Select Parser..." : "No Available Parsers"}</option>
             {compatibleParsers.map(p => <option key={p._id} value={p._id}>{p.label}</option>)}
           </select>
         </div>
 
-        <div className={`form-step-wrapper ${isParserValid ? 'active' : 'locked'}`}>
-          <label className="input-label">3. Data Consumers</label>
+        {/* STEP 3: Grayed out until Step 2 is valid */}
+        <div className={`form-step-wrapper ${isParserValid ? 'active' : 'locked'}`} style={getStageStyle(isParserValid)}>
+          <label className="input-label" style={{ color: 'inherit' }}>3. Data Consumers</label>
           <div className="checkbox-list">
-            {!isParserValid && <p className="hint-text">Define previous nodes.</p>}
-            {compatibleConsumers.map(c => (
-              <div key={c._id} className="consumer-item-wrapper">
-                <label className="tech-checkbox-label">
-                  <input 
-                    type="checkbox" 
-                    disabled={!isParserValid}
-                    checked={selectedConsumerIds.includes(c._id)}
-                    onChange={e => {
-                      if(e.target.checked) setSelectedConsumerIds([...selectedConsumerIds, c._id]);
-                      else setSelectedConsumerIds(selectedConsumerIds.filter(x => x !== c._id));
-                    }}
-                  /> 
-                  {c.label}
-                </label>
-                {selectedConsumerIds.includes(c._id) && c.parameters?.length > 0 && (
-                  <div className="consumer-params-box">
-                    {c.parameters.map(param => (
-                      <div key={param.name} className="param-input-group">
-                        <label className="param-label">{param.label}</label>
-                        <input 
-                          type={param.type || 'text'}
-                          className="tech-input-small"
-                          value={consumerParams[c.name]?.[param.name] || ''}
-                          onChange={(e) => handleParamChange(c.name, param.name, e.target.value)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
+            {!isParserValid && <p className="hint-text" style={{ color: '#8b949e' }}>Define previous nodes.</p>}
+            {isParserValid && compatibleConsumers.length === 0 && <p className="error-text">No Available Consumers</p>}
+            {compatibleConsumers.map(c => {
+              const relevantClients = managedClients.filter(mc => mc.templateName === c.name);
+              
+              return (
+                <div key={c._id} className="consumer-item-wrapper" style={{ color: isParserValid ? 'inherit' : '#8b949e' }}>
+                  <label className="tech-checkbox-label" style={{ cursor: isParserValid ? 'pointer' : 'not-allowed' }}>
+                    <input 
+                      type="checkbox" 
+                      disabled={!isParserValid}
+                      checked={selectedConsumerIds.includes(c._id)}
+                      onChange={e => {
+                        if(e.target.checked) setSelectedConsumerIds([...selectedConsumerIds, c._id]);
+                        else setSelectedConsumerIds(selectedConsumerIds.filter(x => x !== c._id));
+                      }}
+                    /> 
+                    {c.label}
+                  </label>
+
+                  {selectedConsumerIds.includes(c._id) && (
+                    <div className="consumer-params-box">
+                      {relevantClients.length > 0 && (
+                        <div className="param-input-group" style={{ marginBottom: '15px', borderBottom: '1px solid #30363d', paddingBottom: '10px' }}>
+                          <label className="param-label" style={{ color: '#58a6ff' }}>Use Saved Client</label>
+                          <select 
+                            className="tech-select-small"
+                            onChange={(e) => handleSelectManagedClient(c.name, e.target.value)}
+                            value={consumerParams[c.name]?._managedClientId || ''}
+                          >
+                            <option value="">-- Manual Configuration --</option>
+                            {relevantClients.map(rc => (
+                              <option key={rc._id} value={rc._id}>{rc.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      {c.parameters?.map(param => (
+                        <div key={param.name} className="param-input-group">
+                          <label className="param-label">{param.label}</label>
+                          <input 
+                            type={param.type || 'text'}
+                            className="tech-input-small"
+                            value={consumerParams[c.name]?.[param.name] || ''}
+                            onChange={(e) => handleParamChange(c.name, param.name, e.target.value)}
+                            disabled={!!consumerParams[c.name]?._managedClientId} 
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 

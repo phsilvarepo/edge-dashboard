@@ -50,7 +50,8 @@ const seedDefinitions = async () => {
       name: 'console',
       label: 'System Console Log',
       inputs: ['json'],
-      parameters: []
+      parameters: [],
+      hidden: true
     },
     {
       type: 'consumer',
@@ -59,15 +60,16 @@ const seedDefinitions = async () => {
       inputs: ['csv', 'json', 'jpeg'],
       parameters: [
         { name: 'minIO_url', type: 'text', label: 'MinIO URL' },
+        { name: 'minIO_port', type: 'number', label: 'Port number'},
         { name: 'minIO_username', type: 'text', label: 'MinIO username' },
         { name: 'minIO_password', type: 'password', label: 'MinIO password' },
-        { name: 'minIO_bucket', type: 'text', label: 'Bucket name'}
+        { name: 'minIO_bucket', type: 'text', label: 'Bucket name'},
       ]
     },
     {
       type: 'consumer',
       name: 'mqtt',
-      label: 'MQTT Forwarder (Publisher)',
+      label: 'MQTT Forwarder',
       inputs: ['json'],
       parameters: [
         { name: 'mqtt_url', type: 'text', label: 'Remote MQTT URL' },
