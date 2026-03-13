@@ -129,7 +129,9 @@ export default function ConnectorsList() {
               onClick={() => isDeleteMode && toggleSelect(c._id)}
             >
               <div className="status-header">
-                <h4 style={{ color: '#58a6ff', fontFamily: 'monospace' }}>{c.name}</h4>
+                <h4>
+                  {c.name.toUpperCase()} 
+                </h4>
                 <div 
                   className={`pulse-dot ${c.enabled ? 'active' : ''}`}
                   style={{ cursor: 'pointer' }}

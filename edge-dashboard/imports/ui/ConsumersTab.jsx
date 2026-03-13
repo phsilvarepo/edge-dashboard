@@ -94,7 +94,7 @@ export default function ConsumersTab() {
               <div className="status-header">
                 <h4 style={{ color: '#58a6ff' }}>
                   {c.id.toUpperCase()} 
-                  <span className="text-dim" style={{ fontSize: '0.85em', marginLeft: '8px', opacity: 0.6 }}>
+                  <span className="text-dim" style={{ marginLeft: '8px', color: '#58a6ff' }}>
                     ({c.connector})
                   </span>
                 </h4>

@@ -30,9 +30,9 @@ export default function ParsersTab() {
           return (
             <div className="status-card" key={p._id}>
               <div className="status-header">
-                <h4 style={{ color: '#58a6ff' }}>
+                <h4>
                   {p.id.toUpperCase()} 
-                  <span className="text-dim" style={{ fontSize: '1em', marginLeft: '8px', color: '#58a6ff'}}>
+                  <span className="text-header-dim">
                     ({p.connector})
                   </span>
                 </h4>
