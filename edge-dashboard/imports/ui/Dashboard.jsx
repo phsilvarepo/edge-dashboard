@@ -3,8 +3,7 @@ import ProvidersTab from './ProvidersTab';
 import ParsersTab from './ParsersTab';
 import ConsumersTab from './ConsumersTab';
 import ConnectorsList from './ConnectorsList';
-import AddConnector from './AddConnector';
-import './Dashboard.css'; // Import the new styles
+import './Dashboard.css'; 
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('connectors');

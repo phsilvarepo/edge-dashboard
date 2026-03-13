@@ -1,4 +1,3 @@
-// server/main.js
 import { Meteor } from 'meteor/meteor';
 import './publications';
 import { ComponentDefinitions, ProvidersTemplate } from '/imports/api/collections';

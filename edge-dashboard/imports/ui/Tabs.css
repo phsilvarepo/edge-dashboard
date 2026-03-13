@@ -52,15 +52,6 @@
   color: inherit;          
   margin-left: 8px;
   text-transform: none;  
-  opacity: 1;               
-}
-
-.status-header-sub {
-  font-size: 0.9rem;
-  opacity: 0.7;
-  margin-left: 8px;
-  font-weight: normal;
-  text-transform: none;
 }
 
 .pulse-dot {
@@ -74,7 +65,22 @@
 .pulse-dot.active {
   background: #3fb950;
   box-shadow: 0 0 8px #3fb950;
-  /* Keep your existing animation here */
+  animation: pulse-animation 2s infinite;
+}
+
+@keyframes pulse-animation {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(63, 185, 80, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(63, 185, 80, 0);
+  }
 }
 
 .status-meta {
@@ -89,12 +95,6 @@
   padding: 4px 0;
 }
 
-@keyframes pulse-animation {
-  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.7); }
-  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(63, 185, 80, 0); }
-  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(63, 185, 80, 0); }
-}
-
 .status-card.clickable {
   cursor: pointer;
   transition: all 0.2s ease;
@@ -103,16 +103,6 @@
 .status-card.clickable:hover {
   border-color: #58a6ff;
   background: #1c2128;
-}
-
-.live-preview {
-  background: #0d1117;
-  padding: 8px;
-  border-radius: 4px;
-  margin: 10px 0;
-  font-size: 12px;
-  color: #3fb950;
-  border-left: 2px solid #3fb950;
 }
 
 .mono-text { font-family: 'Courier New', monospace; }
@@ -129,9 +119,19 @@
   border-radius: 12px; width: 90%; max-width: 500px; position: relative;
 }
 
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
 .close-btn {
-  position: absolute; top: 15px; right: 20px; background: none;
-  border: none; color: #8b949e; font-size: 24px; cursor: pointer;
+  background: none;
+  border: none; 
+  color: #8b949e; 
+  font-size: 24px; 
+  cursor: pointer;
 }
 
 .telemetry-box {
@@ -155,17 +155,6 @@
   border: 1px solid #30363d;
   background: #161b22;
   box-shadow: 0 20px 50px rgba(0,0,0,0.7);
-}
-
-.modal-subtitle {
-  color: #8b949e;
-  font-size: 13px;
-  margin-bottom: 20px;
-}
-
-.header-icon {
-  font-size: 24px;
-  margin-right: 12px;
 }
 
 .input-row {

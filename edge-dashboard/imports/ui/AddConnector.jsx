@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Meteor } from 'meteor/meteor';
 import { useTracker } from 'meteor/react-meteor-data';
-// Added ConsumerClients to imports
 import { Connectors, ProvidersStatus, ComponentDefinitions, ConsumerClients } from '/imports/api/collections';
 import './AddConnectorUI.css'; 
 
@@ -130,7 +129,12 @@ export default function AddConnector({ onComplete }) {
         {/* STEP 1: Always Active */}
         <div className="form-step-wrapper active">
           <label className="input-label">Connector Name</label>
-          <input className="tech-input" value={id} onChange={handleIdChange} placeholder="E.G. LINE_1_TEMP" />
+          <input 
+            className={`tech-input ${error ? 'error-input' : ''}`} 
+            value={id} 
+            onChange={handleIdChange} 
+            placeholder="E.G. JSON_CONVERTER" 
+          />
           {error && <p className="error-text">{error}</p>}
 
           <label className="input-label" style={{ marginTop: '15px' }}>1. Live Data Source</label>
@@ -149,7 +153,7 @@ export default function AddConnector({ onComplete }) {
           <label className="input-label" style={{ color: 'inherit' }}>2. Data Parser</label>
           <select 
             className="tech-select" 
-            style={{ color: 'inherit' }} // Force the text color to follow the parent (gray when locked)
+            style={{ color: 'inherit' }}
             disabled={!isSensorValid || compatibleParsers.length === 0}
             value={selectedParserId}
             onChange={e => {
@@ -186,8 +190,9 @@ export default function AddConnector({ onComplete }) {
                     {c.label}
                   </label>
 
-                  {selectedConsumerIds.includes(c._id) && (
+                  {selectedConsumerIds.includes(c._id) && (relevantClients.length > 0 || (c.parameters && c.parameters.length > 0)) && (
                     <div className="consumer-params-box">
+                      {/* 1. Show Saved Clients Dropdown if they exist */}
                       {relevantClients.length > 0 && (
                         <div className="param-input-group" style={{ marginBottom: '15px', borderBottom: '1px solid #30363d', paddingBottom: '10px' }}>
                           <label className="param-label" style={{ color: '#58a6ff' }}>Use Saved Client</label>
@@ -204,6 +209,7 @@ export default function AddConnector({ onComplete }) {
                         </div>
                       )}
 
+                      {/* 2. Show Manual Parameters if they exist */}
                       {c.parameters?.map(param => (
                         <div key={param.name} className="param-input-group">
                           <label className="param-label">{param.label}</label>

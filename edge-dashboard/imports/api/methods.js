@@ -1,15 +1,8 @@
 import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import mqtt from 'mqtt';
-import * as Minio from 'minio'; // Ensure 'npm install minio' has been run
-import { 
-  Connectors, 
-  ParsersStatus, 
-  ProvidersStatus, 
-  ProvidersTemplate, 
-  ConsumerClients,
-  ConsumersStatus 
-} from './collections';
+import * as Minio from 'minio';
+import { Connectors, ParsersStatus, ProvidersStatus, ProvidersTemplate, ConsumerClients, ConsumersStatus} from './collections';
 
 let globalMqttClient = null;
 let isDiscoveryActive = false; 

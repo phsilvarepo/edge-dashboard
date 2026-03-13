@@ -1,7 +1,5 @@
 import { Meteor } from 'meteor/meteor';
-import { ProvidersStatus, ParsersStatus, ConsumersStatus,  ProvidersTemplate, ConsumerClients} from '/imports/api/collections';
-import { Connectors } from '../imports/api/collections';
-import { ComponentDefinitions } from '/imports/api/collections';
+import { ProvidersStatus, ParsersStatus, ConsumersStatus, ProvidersTemplate, ConsumerClients, Connectors, ComponentDefinitions} from '/imports/api/collections';
 
 Meteor.publish('providers_status', function () {
   return ProvidersStatus.find();

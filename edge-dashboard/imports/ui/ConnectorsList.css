@@ -64,23 +64,6 @@
   box-shadow: 0 20px 50px rgba(0,0,0,0.5);
 }
 
-.modal-close {
-  position: absolute;
-  top: 15px; right: 15px;
-  background: transparent;
-  border: none;
-  color: var(--text-dim);
-  font-size: 24px;
-  cursor: pointer;
-}
-
-.delete-group {
-  display: flex;
-  border-radius: 6px;
-  overflow: hidden;
-  border: 1px solid #6e2121;
-}
-
 .btn-action {
   background: #3e1a1a; 
   color: #ff9999;
@@ -105,15 +88,6 @@
 .btn-action.btn-danger {
   background: #da3633 !important;
   color: white;
-}
-
-.btn-expand {
-  background: #2a1414;
-  color: #ff9999;
-  border: none;
-  border-left: 1px solid #6e2121;
-  padding: 0 10px;
-  cursor: pointer;
 }
 
 .btn-confirm-delete {
@@ -184,20 +158,6 @@
   margin-top: 20px;
 }
 
-.empty-state-content h3 {
-  color: var(--text-dim);
-  font-weight: 500;
-  font-size: 18px;
-  margin: 0;
-}
-
 .status-card.selectable .pulse-dot {
   display: none !important;
-}
-
-.selection-overlay {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 2;
 }
