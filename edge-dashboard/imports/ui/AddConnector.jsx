@@ -201,7 +201,7 @@ export default function AddConnector({ onComplete }) {
                             onChange={(e) => handleSelectManagedClient(c.name, e.target.value)}
                             value={consumerParams[c.name]?._managedClientId || ''}
                           >
-                            <option value="">-- Manual Configuration --</option>
+                            <option value="">Manual configuration of consumer</option>
                             {relevantClients.map(rc => (
                               <option key={rc._id} value={rc._id}>{rc.label}</option>
                             ))}
