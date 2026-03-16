@@ -1,5 +1,5 @@
 import { Meteor } from 'meteor/meteor';
-import { ProvidersStatus, ParsersStatus, ConsumersStatus, ProvidersTemplate, ConsumerClients, Connectors, ComponentDefinitions} from '/imports/api/collections';
+import { ProvidersStatus, ParsersStatus, ConsumersStatus, ProvidersTemplate, ConsumerClients, Connectors, ComponentDefinitions, MqttCommands} from '/imports/api/collections';
 
 Meteor.publish('providers_status', function () {
   return ProvidersStatus.find();
@@ -27,4 +27,8 @@ Meteor.publish('providers_template', function () {
 
 Meteor.publish('consumer_clients', function () {
   return ConsumerClients.find();
+});
+
+Meteor.publish('mqtt_commands', function () {
+  return MqttCommands.find();
 });

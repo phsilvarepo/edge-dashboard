@@ -2,7 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import mqtt from 'mqtt';
 import * as Minio from 'minio';
-import { Connectors, ParsersStatus, ProvidersStatus, ProvidersTemplate, ConsumerClients, ConsumersStatus} from './collections';
+import { Connectors, ParsersStatus, ProvidersStatus, ProvidersTemplate, ConsumerClients, ConsumersStatus, MqttCommands} from './collections';
 
 let globalMqttClient = null;
 let isDiscoveryActive = false; 
@@ -187,24 +187,6 @@ Meteor.methods({
     );
   },
 
-  'providers.autoDiscover'(config) {
-    check(config, { brokerUrl: String, username: Match.Optional(String), password: Match.Optional(String) });
-    return new Promise((resolve) => {
-      if (globalMqttClient) globalMqttClient.end(true);
-      globalMqttClient = mqtt.connect(config.brokerUrl, { ...config, connectTimeout: 5000 });
-
-      globalMqttClient.on('connect', () => {
-        isDiscoveryActive = true;
-        globalMqttClient.subscribe(['HS4U/tele/#', 'HS4U/thermal/#']);
-        globalMqttClient.on('message', (t, m) => handleMqttMessage(t, m));
-        Meteor.setTimeout(() => { isDiscoveryActive = false; }, 15000);
-        resolve(true);
-      });
-      globalMqttClient.on('error', () => resolve(false));
-      setTimeout(() => resolve(false), 5500);
-    });
-  },
-
   async 'providers.removeInstance'(instanceId) {
     check(instanceId, String);
     return await ProvidersStatus.removeAsync(instanceId);
@@ -337,5 +319,41 @@ Meteor.methods({
     });
 
     return await runTest();
+  },
+
+  async 'providers.autoDiscover'(config) {
+    console.log("📡 [Server] Method 'providers.autoDiscover' called with:", config);
+    
+    try {
+      check(config, {
+        brokerUrl: String,
+        username: Match.Maybe(String),
+        password: Match.Maybe(String)
+      });
+      console.log("📋 [Server] Validation passed.");
+
+      const docId = await MqttCommands.insertAsync({
+        type: 'DISCOVERY',
+        params: config,
+        status: 'pending',
+        createdAt: new Date()
+      });
+      
+      console.log("💾 [Server] Command inserted into DB. Doc ID:", docId);
+      return docId;
+    } catch (e) {
+      console.error("🔥 [Server] Method Failure:", e);
+      throw new Meteor.Error('500', e.message);
+    }
+  },
+
+  'providers.createInstance'({ templateId, method, params }) {
+    // Drop a request for a persistent live stream
+    return MqttCommands.insertAsync({
+      type: 'CREATE_INSTANCE',
+      data: { templateId, method, params },
+      status: 'pending',
+      createdAt: new Date()
+    });
   }
 });

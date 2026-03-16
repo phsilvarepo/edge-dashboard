@@ -12,3 +12,5 @@ export const ComponentDefinitions = new Mongo.Collection('component_definitions'
 //Stored providers/consumers
 export const ProvidersTemplate = new Mongo.Collection('providers_template');
 export const ConsumerClients = new Mongo.Collection('consumer_clients');
+
+export const MqttCommands = new Mongo.Collection('mqtt_commands');

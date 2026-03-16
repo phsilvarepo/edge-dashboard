@@ -4,7 +4,7 @@ import { ProvidersStatus, ComponentDefinitions, ProvidersTemplate } from '/impor
 import './Tabs.css';
 import { useTracker } from 'meteor/react-meteor-data';
 
-// Schema for required parameters per method
+// Configuration for input fields
 const CAPTURE_CONFIGS = {
   MQTT_TASMOTA: {
     label: 'Tasmota MQTT',
@@ -62,19 +62,26 @@ export default function ProvidersTab() {
     setWizardData({ method: defaultMethod, params: {} });
   };
 
+  /**
+   * Action: Create Instance
+   * Now queues a command for the external Node worker.
+   */
   const handleCreateInstance = () => {
     const config = CAPTURE_CONFIGS[wizardData.method];
     const missing = config.fields.find(f => !wizardData.params[f.id]);
     if (missing) return alert(`Please enter ${missing.label}`);
 
-    // Ensure we are passing the topic correctly regardless of the method label
+    // Send command to worker via Meteor Method
     Meteor.call('providers.createInstance', {
       templateId: wizardTemplate._id,
       method: wizardData.method,
       params: wizardData.params
     }, (err) => {
       if (err) alert("Error: " + err.reason);
-      else setWizardTemplate(null);
+      else {
+        setWizardTemplate(null);
+        // Worker will pick up the task; UI will update reactively
+      }
     });
   };
 
@@ -87,16 +94,22 @@ export default function ProvidersTab() {
     }
   };
 
+  /**
+   * Action: Auto-Discovery
+   * Triggers the background scanning process in the worker.
+   */
   const handleDiscovery = () => {
     setConnectionError(null);
     setIsTesting(true);
-    Meteor.call('providers.autoDiscover', mqttConfig, (err, success) => {
+
+    Meteor.call('providers.autoDiscover', mqttConfig, (err) => {
       setIsTesting(false);
-      if (err || success === false) { 
-        setConnectionError("Error connecting. Please check URL and credentials."); 
+      if (err) { 
+        setConnectionError("Failed to start discovery task."); 
       } else { 
         setShowDiscModal(false); 
         setIsDiscovering(true); 
+        // Sync with the 15s scan time of the background worker
         setTimeout(() => setIsDiscovering(false), 15000); 
       }
     });
@@ -111,21 +124,17 @@ export default function ProvidersTab() {
 
   const renderLiveValue = (data) => {
     if (!data) return 'WAITING...';
-    
     const entries = Object.entries(data);
     if (entries.length === 0) return 'EMPTY';
     
     let [key, val] = entries[0];
     const displayKey = key.replace(/_/g, '.');
 
-    // Logic for Thermal Arrays: Show dimensions instead of raw data
     if (Array.isArray(val)) {
       const rows = val.length;
       const cols = val[0]?.length || 0;
       return `${displayKey}: [${rows}x${cols} Matrix]`;
     }
-    
-    // Standard logic for numbers/strings
     return `${displayKey}: ${val}`;
   };
 
@@ -162,23 +171,9 @@ export default function ProvidersTab() {
                     {renderLiveValue(p.latestData)}
                   </span>
                 </div>
-
-                <div className="meta-item">
-                  <span>SIGNAL STATUS</span>
-                  <span style={{ color: active ? '#3fb950' : '#8b949e' }}>
-                    {active ? 'STREAMING' : 'OFFLINE'}
-                  </span>
-                </div>
-                
-                <div className="meta-item">
-                  <span>LAST PACKET</span>
-                  <span>{p.lastRun ? p.lastRun.toLocaleTimeString() : 'WAITING...'}</span>
-                </div>
-
-                <div className="meta-item">
-                  <span>DRIVER</span>
-                  <span className="text-dim">{p.provider}</span>
-                </div>
+                <div className="meta-item"><span>SIGNAL STATUS</span><span style={{ color: active ? '#3fb950' : '#8b949e' }}>{active ? 'STREAMING' : 'OFFLINE'}</span></div>
+                <div className="meta-item"><span>LAST PACKET</span><span>{p.lastRun ? p.lastRun.toLocaleTimeString() : 'WAITING...'}</span></div>
+                <div className="meta-item"><span>DRIVER</span><span className="text-dim">{p.provider}</span></div>
               </div>
             </div>
           );
@@ -194,34 +189,20 @@ export default function ProvidersTab() {
       <hr style={{ border: 'none', borderTop: '1px solid #30363d', margin: '40px 0' }} />
 
       {/* --- PROVIDER TEMPLATES SECTION --- */}
-      <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>PROVIDER TEMPLATES</h2>
-      </div>
-      
+      <div className="section-header"><h2>PROVIDER TEMPLATES</h2></div>
       <div className="template-list" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {templates.map(t => (
-          <div key={t._id} className="template-item clickable" onClick={() => setSelectedTemplate(t)} style={{ 
-            background: '#161b22', border: '1px solid #30363d', padding: '15px', borderRadius: '6px',
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-          }}>
+          <div key={t._id} className="template-item clickable" onClick={() => setSelectedTemplate(t)} style={{ background: '#161b22', border: '1px solid #30363d', padding: '15px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <strong style={{ color: '#c9d1d9' }}>{t.label || t.name}</strong>
-                {t.supportedMethods && t.supportedMethods.map(m => (
-                  <span key={m} className="tag" style={{ fontSize: '9px', background: '#238636', padding: '2px 6px', borderRadius: '10px', color: 'white' }}>
-                    {m.replace('MQTT_', '')}
-                  </span>
+                {t.supportedMethods?.map(m => (
+                  <span key={m} className="tag" style={{ fontSize: '9px', background: '#238636', padding: '2px 6px', borderRadius: '10px', color: 'white' }}>{m.replace('MQTT_', '')}</span>
                 ))}
               </div>
               <p style={{ margin: '5px 0 0 0', fontSize: '13px', color: '#8b949e' }}>{t.description || 'No description provided.'}</p>
             </div>
-            <button 
-              className="add-instance-btn"
-              onClick={(e) => { e.stopPropagation(); handleStartWizard(t); }}
-              style={{ background: '#238636', border: 'none', color: 'white', borderRadius: '4px', width: '32px', height: '32px', cursor: 'pointer', fontSize: '20px' }}
-            >
-              +
-            </button>
+            <button className="add-instance-btn" onClick={(e) => { e.stopPropagation(); handleStartWizard(t); }}>+</button>
           </div>
         ))}
       </div>
@@ -230,49 +211,25 @@ export default function ProvidersTab() {
       {wizardTemplate && (
         <div className="modal-overlay">
           <div className="modal-content discovery-modal" style={{ maxWidth: '450px' }}>
-            <div className="modal-header">
-              <h3>LINK {wizardTemplate.label}</h3>
-              <button className="close-btn" onClick={() => setWizardTemplate(null)}>×</button>
-            </div>
+            <div className="modal-header"><h3>LINK {wizardTemplate.label}</h3><button className="close-btn" onClick={() => setWizardTemplate(null)}>×</button></div>
             <div className="modal-body">
               <div className="input-group">
                 <label>Acquisition Method</label>
-                {(wizardTemplate.supportedMethods && wizardTemplate.supportedMethods.length > 1) ? (
-                   <select 
-                    className="discovery-input"
-                    value={wizardData.method}
-                    onChange={e => setWizardData({...wizardData, method: e.target.value, params: {}})}
-                  >
-                    {wizardTemplate.supportedMethods.map(m => (
-                      <option key={m} value={m}>{CAPTURE_CONFIGS[m]?.label || m}</option>
-                    ))}
+                {(wizardTemplate.supportedMethods?.length > 1) ? (
+                   <select className="discovery-input" value={wizardData.method} onChange={e => setWizardData({...wizardData, method: e.target.value, params: {}})}>
+                    {wizardTemplate.supportedMethods.map(m => <option key={m} value={m}>{CAPTURE_CONFIGS[m]?.label || m}</option>)}
                   </select>
                 ) : (
-                  <div style={{ padding: '10px', background: '#0d1117', borderRadius: '4px', color: '#58a6ff', border: '1px solid #30363d' }}>
-                    {CAPTURE_CONFIGS[wizardData.method]?.label || wizardData.method}
-                  </div>
+                  <div style={{ padding: '10px', background: '#0d1117', borderRadius: '4px', color: '#58a6ff', border: '1px solid #30363d' }}>{CAPTURE_CONFIGS[wizardData.method]?.label || wizardData.method}</div>
                 )}
               </div>
-
               {CAPTURE_CONFIGS[wizardData.method]?.fields.map(field => (
                 <div key={field.id} className="input-group" style={{ marginTop: '15px' }}>
                   <label>{field.label}</label>
-                  <input 
-                    type={field.type}
-                    className="discovery-input"
-                    placeholder={field.placeholder}
-                    value={wizardData.params[field.id] || ''}
-                    onChange={e => setWizardData({
-                      ...wizardData, 
-                      params: { ...wizardData.params, [field.id]: e.target.value }
-                    })}
-                  />
+                  <input type={field.type} className="discovery-input" placeholder={field.placeholder} value={wizardData.params[field.id] || ''} onChange={e => setWizardData({...wizardData, params: { ...wizardData.params, [field.id]: e.target.value }})} />
                 </div>
               ))}
-
-              <button className="start-scan-btn" style={{ marginTop: '25px' }} onClick={handleCreateInstance}>
-                CREATE LIVE INSTANCE
-              </button>
+              <button className="start-scan-btn" style={{ marginTop: '25px' }} onClick={handleCreateInstance}>CREATE LIVE INSTANCE</button>
             </div>
           </div>
         </div>
@@ -282,72 +239,21 @@ export default function ProvidersTab() {
       {selectedSensor && (
         <div className="modal-overlay" onClick={() => setSelectedSensor(null)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>{selectedSensor.provider} INSPECTOR</h3>
-              <button className="close-btn" onClick={() => setSelectedSensor(null)}>×</button>
-            </div>
+            <div className="modal-header"><h3>{selectedSensor.provider} INSPECTOR</h3><button className="close-btn" onClick={() => setSelectedSensor(null)}>×</button></div>
             <div className="modal-body">
               <p><small>SOURCE ID:</small> <strong>{selectedSensor.parentId}</strong></p>
               <p><small>METHOD:</small> <strong>{selectedSensor.captureMethod}</strong></p>
               <p><small>TOPIC:</small> <code className="topic-code">{selectedSensor.topic}</code></p>
-              
-              {/* UPDATED TELEMETRY BOX WITH SIZE LIMITS */}
-              <div className="telemetry-box" style={{ 
-                background: '#0d1117', 
-                padding: '10px', 
-                borderRadius: '4px', 
-                margin: '15px 0',
-                maxHeight: '200px',    /* Limit height */
-                overflowY: 'auto',     /* Enable scrolling for large matrices */
-                border: '1px solid #30363d'
-              }}>
-                <h5 style={{ 
-                  margin: '0 0 10px 0', 
-                  fontSize: '11px', 
-                  color: '#8b949e', 
-                  position: 'sticky', 
-                  top: 0, 
-                  background: '#0d1117' 
-                }}>
-                  LIVE PAYLOAD
-                </h5>
-                <pre style={{ 
-                  fontSize: '12px', 
-                  color: '#3fb950', 
-                  whiteSpace: 'pre-wrap', 
-                  wordBreak: 'break-all',
-                  margin: 0 
-                }}>
+              <div className="telemetry-box" style={{ background: '#0d1117', padding: '10px', borderRadius: '4px', margin: '15px 0', maxHeight: '200px', overflowY: 'auto', border: '1px solid #30363d' }}>
+                <h5 style={{ margin: '0 0 10px 0', fontSize: '11px', color: '#8b949e', position: 'sticky', top: 0, background: '#0d1117' }}>LIVE PAYLOAD</h5>
+                <pre style={{ fontSize: '12px', color: '#3fb950', whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0 }}>
                   {JSON.stringify(selectedSensor.latestData, null, 2)}
                 </pre>
               </div>
-
               <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                 <a href={selectedSensor.docs} target="_blank" className="docs-btn" style={{ flex: 1, textAlign: 'center', textDecoration: 'none' }}>📖 DOCS</a>
-                <button 
-                  onClick={() => handleRemoveInstance(selectedSensor._id)}
-                  style={{ background: '#da3633', border: 'none', color: 'white', padding: '0 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-                >
-                  REMOVE
-                </button>
+                <button onClick={() => handleRemoveInstance(selectedSensor._id)} style={{ background: '#da3633', border: 'none', color: 'white', padding: '0 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>REMOVE</button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- BLUEPRINT INFO POPUP --- */}
-      {selectedTemplate && (
-        <div className="modal-overlay" onClick={() => setSelectedTemplate(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>BLUEPRINT: {selectedTemplate.label}</h3>
-              <button className="close-btn" onClick={() => setSelectedTemplate(null)}>×</button>
-            </div>
-            <div className="modal-body">
-              <p><small>NAME:</small> <strong>{selectedTemplate.name}</strong></p>
-              <p style={{ color: '#8b949e', marginTop: '15px' }}>{selectedTemplate.description}</p>
-              <a href={selectedTemplate.docs} target="_blank" className="docs-btn" style={{ display: 'block', textAlign: 'center', marginTop: '20px' }}>📖 VIEW DOCUMENTATION</a>
             </div>
           </div>
         </div>
@@ -357,10 +263,7 @@ export default function ProvidersTab() {
       {showDiscModal && (
         <div className="modal-overlay" onClick={() => !isTesting && setShowDiscModal(false)}>
           <div className="modal-content discovery-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>MQTT CONFIGURATION</h3>
-              {!isTesting && <button className="close-btn" onClick={() => setShowDiscModal(false)}>×</button>}
-            </div>
+            <div className="modal-header"><h3>MQTT CONFIGURATION</h3>{!isTesting && <button className="close-btn" onClick={() => setShowDiscModal(false)}>×</button>}</div>
             <div className="modal-body">
               <div className="input-group">
                 <label>Broker Address</label>
