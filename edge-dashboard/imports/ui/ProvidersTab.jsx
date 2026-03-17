@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Meteor } from 'meteor/meteor';
 import { ProvidersStatus, ComponentDefinitions, ProvidersTemplate } from '/imports/api/collections';
 import './Tabs.css';
@@ -42,6 +42,17 @@ export default function ProvidersTab() {
   const [wizardTemplate, setWizardTemplate] = useState(null);
   const [wizardData, setWizardData] = useState({ method: '', params: {} });
 
+  // --- HEARTBEAT TIMER ---
+  // This state forces a re-render every 10 seconds to refresh the "Online" status
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const heartbeat = setInterval(() => {
+      setNow(Date.now());
+    }, 10000); // Check every 10 seconds
+    return () => clearInterval(heartbeat);
+  }, []);
+
   const { providers, templates, definitions, isLoading } = useTracker(() => {
     const sub1 = Meteor.subscribe('providers_status');
     const sub2 = Meteor.subscribe('component_definitions');
@@ -64,14 +75,12 @@ export default function ProvidersTab() {
 
   /**
    * Action: Create Instance
-   * Now queues a command for the external Node worker.
    */
   const handleCreateInstance = () => {
     const config = CAPTURE_CONFIGS[wizardData.method];
     const missing = config.fields.find(f => !wizardData.params[f.id]);
     if (missing) return alert(`Please enter ${missing.label}`);
 
-    // Send command to worker via Meteor Method
     Meteor.call('providers.createInstance', {
       templateId: wizardTemplate._id,
       method: wizardData.method,
@@ -80,7 +89,7 @@ export default function ProvidersTab() {
       if (err) alert("Error: " + err.reason);
       else {
         setWizardTemplate(null);
-        // Worker will pick up the task; UI will update reactively
+        alert("Sensor linked! Waiting for first data packet...");
       }
     });
   };
@@ -96,7 +105,6 @@ export default function ProvidersTab() {
 
   /**
    * Action: Auto-Discovery
-   * Triggers the background scanning process in the worker.
    */
   const handleDiscovery = () => {
     setConnectionError(null);
@@ -109,13 +117,16 @@ export default function ProvidersTab() {
       } else { 
         setShowDiscModal(false); 
         setIsDiscovering(true); 
-        // Sync with the 15s scan time of the background worker
         setTimeout(() => setIsDiscovering(false), 15000); 
       }
     });
   };
 
-  const isOnline = (lastRun) => lastRun && lastRun >= new Date(Date.now() - 35000);
+  // Uses the current 'now' state refreshed by the timer
+  const isOnline = (lastRun) => {
+    if (!lastRun) return false;
+    return lastRun >= new Date(now - 35000);
+  };
   
   const getLabel = (p) => {
     const def = definitions.find(d => d.name === p.provider);

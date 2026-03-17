@@ -36,16 +36,24 @@ const getShortId = (topic) => {
 /**
  * CORE LOGIC: Processes incoming MQTT packets and updates individual sensor docs.
  */
+/**
+ * CORE LOGIC: Processes incoming MQTT packets
+ */
 async function processMqttMessage(topic, message, providersCol, templatesCol) {
   const top = topic.toUpperCase();
-  const msgStr = message.toString();
-  if (!msgStr.startsWith('{')) return; // Skip non-JSON LWT/Status messages
+  const msgStr = message.toString().trim();
+  
+  // 1. Filter out known non-JSON LWT messages immediately to keep logs clean
+  if (msgStr === 'Online' || msgStr === 'Offline') {
+    return; 
+  }
 
   try {
+    // Attempt to parse the payload
     const payload = JSON.parse(msgStr);
     const shortId = getShortId(topic);
 
-    // 1. GRANULAR TASMOTA SENSORS
+    // --- CASE A: TASMOTA SENSORS ---
     if (top.startsWith('HS4U/TELE/') && top.endsWith('/SENSOR')) {
       for (const key of Object.keys(payload)) {
         if (['Time', 'TempUnit'].includes(key)) continue;
@@ -66,21 +74,29 @@ async function processMqttMessage(topic, message, providersCol, templatesCol) {
       }
     }
 
-    // 2. THERMAL CAMERA MATRIX
-    if (top.startsWith('HS4U/THERMAL/') && top.endsWith('/IMG')) {
+    // --- CASE B: THERMAL CAMERA MATRIX ---
+    // Note: We use .includes and .endsWith to be robust
+    if (top.includes('/THERMAL/') && top.endsWith('/IMG')) {
       const uniqueId = `${shortId}_THERMAL_CAMERA`.toUpperCase();
+      
       await providersCol.updateOne(
         { _id: uniqueId },
         {
           $set: {
             lastRun: new Date(),
-            latestData: sanitizeKeys(payload)
+            latestData: sanitizeKeys(payload) // This handles both Object and Array
           }
         }
       );
+      // Optional: console.log(`📸 [Thermal] Updated ${uniqueId}`);
     }
+
   } catch (e) {
-    // Parsing error or missing template, ignore
+    // Only log error if it's a topic we expected to be JSON data
+    if (top.includes('SENSOR') || top.includes('IMG')) {
+      console.log(`⚠️ [MQTT] JSON Parse Error on ${topic}: ${e.message}`);
+      console.log(`📝 [MQTT] Raw content attempt: ${msgStr.substring(0, 50)}...`);
+    }
   }
 }
 
@@ -131,27 +147,39 @@ async function syncLiveStreams(providersCol, templatesCol) {
  * Handle Auto-Discovery Command
  */
 async function handleDiscovery(doc, providersCol, templatesCol) {
-  const { brokerUrl, username, password } = doc.params;
-  const scanner = mqtt.connect(brokerUrl, { username, password, connectTimeout: 5000 });
+  // Support both doc.params and doc.data (based on previous logs)
+  const discoveryParams = doc.params || doc.data?.params || doc.data;
+  const { brokerUrl, username, password } = discoveryParams;
+
+  const scanner = mqtt.connect(brokerUrl, { 
+    username, 
+    password, 
+    connectTimeout: 5000 
+  });
 
   return new Promise((resolve) => {
     scanner.on('connect', () => {
-      console.log(`🔍 [Discovery] Scanning ${brokerUrl}...`);
+      console.log(`🔍 [Discovery] Connected to ${brokerUrl}. Subscribing...`);
+      // Subscribing to wildcards for both Tasmota and Thermal Cameras
       scanner.subscribe(['HS4U/tele/#', 'HS4U/thermal/#']);
     });
 
     scanner.on('message', async (topic, message) => {
       const top = topic.toUpperCase();
       const msgStr = message.toString();
-      if (!msgStr.startsWith('{')) return;
+      
+      console.log(`🛰️ [Discovery] Heard Topic: ${topic}`);
 
       try {
         const payload = JSON.parse(msgStr);
         const shortId = getShortId(topic);
 
+        // --- 1. TASMOTA DISCOVERY ---
         if (top.startsWith('HS4U/TELE/') && top.endsWith('/SENSOR')) {
+          console.log(`🌿 [Discovery] Processing Tasmota payload from ${shortId}`);
           for (const key of Object.keys(payload)) {
             if (['Time', 'TempUnit'].includes(key)) continue;
+            
             const template = await templatesCol.findOne({ name: key });
             if (!template) continue;
 
@@ -168,7 +196,7 @@ async function handleDiscovery(doc, providersCol, templatesCol) {
                   topic: topic,
                   parentId: shortId,
                   dataType: template.outputType || 'json',
-                  params: doc.params, // Critical for syncLiveStreams
+                  params: discoveryParams, 
                   lastRun: new Date(),
                   latestData: sanitizeKeys(payload[key])
                 }
@@ -178,8 +206,12 @@ async function handleDiscovery(doc, providersCol, templatesCol) {
           }
         }
 
-        if (top.startsWith('HS4U/THERMAL/') && top.endsWith('/IMG')) {
+        // --- 2. THERMAL CAMERA DISCOVERY ---
+        // Changed to .includes for broader matching in case of prefix variations
+        if (top.includes('/THERMAL/') && top.endsWith('/IMG')) {
+          console.log(`🎯 [Discovery] FOUND THERMAL CAMERA: ${topic}`);
           const uniqueId = `${shortId}_THERMAL_CAMERA`.toUpperCase();
+          
           await providersCol.updateOne(
             { _id: uniqueId },
             {
@@ -191,23 +223,79 @@ async function handleDiscovery(doc, providersCol, templatesCol) {
                 topic: topic,
                 parentId: shortId,
                 dataType: 'image_matrix',
-                params: doc.params,
+                params: discoveryParams,
                 lastRun: new Date(),
                 latestData: sanitizeKeys(payload)
               }
             },
             { upsert: true }
           );
+          console.log(`💾 [Discovery] Thermal Document saved/updated: ${uniqueId}`);
         }
-      } catch (e) {}
+
+      } catch (e) {
+        // Only log parse errors for topics we actually care about
+        if (top.includes('SENSOR') || top.includes('IMG')) {
+            console.log(`⚠️ [Discovery] Failed to parse JSON on ${topic}`);
+        }
+      }
     });
 
+    // Scan for 15 seconds then close
     setTimeout(() => {
       scanner.end();
-      console.log("🛑 [Discovery] Scan Finished.");
+      console.log("🛑 [Discovery] Scan Session Finished.");
       resolve();
     }, 15000);
   });
+}
+
+async function handleCreateInstance(doc, providersCol, templatesCol) {
+  // CHANGE doc.params TO doc.data
+  const { templateId, method, params } = doc.data; 
+
+  if (!templateId || !method || !params) {
+    console.error("❌ [Manual] Missing data in command:", doc.data);
+    throw new Error("Missing required fields: templateId, method, or params");
+  }
+  
+  console.log(`🛠️ [Manual] Creating instance for template ID: ${templateId}`);
+
+  // The rest remains the same...
+  const template = await templatesCol.findOne({ _id: templateId });
+  
+  if (!template) {
+    console.error(`❌ [Manual] Template NOT FOUND for ID: ${templateId}`);
+    throw new Error(`Template ${templateId} not found`);
+  }
+
+  const mqttTopic = params.topic; 
+  if (!mqttTopic) throw new Error("No MQTT topic provided in params");
+
+  const shortId = getShortId(mqttTopic);
+  const uniqueId = `${shortId}_${template.name}`.toUpperCase();
+
+  await providersCol.updateOne(
+    { _id: uniqueId },
+    {
+      $set: {
+        id: uniqueId,
+        templateId: template._id,
+        provider: template.name,
+        label: template.label || template.name,
+        captureMethod: method,
+        topic: mqttTopic,
+        parentId: shortId,
+        dataType: template.outputType || 'json',
+        params: params, 
+        lastRun: new Date(),
+        latestData: { status: "Linked, awaiting data..." }
+      }
+    },
+    { upsert: true }
+  );
+  
+  console.log(`✅ [Manual] Instance ${uniqueId} created successfully.`);
 }
 
 /**
@@ -237,6 +325,12 @@ async function run() {
         await handleDiscovery(doc, providersCol, templatesCol);
         await syncLiveStreams(providersCol, templatesCol);
       } 
+
+      else if (doc.type === 'CREATE_INSTANCE') {
+        // --- NEW LOGIC FOR MANUAL CREATION ---
+        await handleCreateInstance(doc, providersCol, templatesCol);
+        await syncLiveStreams(providersCol, templatesCol);
+      }
       
       await commandsCol.updateOne({ _id: doc._id }, { $set: { status: 'done' } });
     } catch (err) {
