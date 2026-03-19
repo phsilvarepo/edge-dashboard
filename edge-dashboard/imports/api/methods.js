@@ -355,5 +355,9 @@ Meteor.methods({
       status: 'pending',
       createdAt: new Date()
     });
+  },
+
+  async 'providers.removeAll'() {
+    return await ProvidersStatus.removeAsync({});
   }
 });

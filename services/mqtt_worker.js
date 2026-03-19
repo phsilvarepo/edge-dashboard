@@ -1,19 +1,14 @@
 const { MongoClient, ObjectId } = require('mongodb');
 const mqtt = require('mqtt');
 
-// --- CONFIGURATION ---
 const MONGO_URL = "mongodb://127.0.0.1:3001/meteor"; 
 const client = new MongoClient(MONGO_URL);
 
-// --- STATE MANAGEMENT ---
-const brokerClients = new Map(); // Key: Broker URL | Value: MQTT Client
-const subscribedTopics = new Map(); // Key: Broker URL | Value: Set of Topics
+const brokerClients = new Map();
+const subscribedTopics = new Map(); 
 
 // --- HELPERS ---
 
-/**
- * Replaces dots with underscores so MongoDB doesn't throw errors.
- */
 const sanitizeKeys = (obj) => {
   if (typeof obj !== 'object' || obj === null) return obj;
   const newObj = Array.isArray(obj) ? [] : {};
@@ -24,32 +19,21 @@ const sanitizeKeys = (obj) => {
   return newObj;
 };
 
-/**
- * Extracts short ID (e.g., 838A04) from topic HS4U/tele/tasmota_838A04/SENSOR
- */
 const getShortId = (topic) => {
   const parts = topic.split('/');
   const rawId = parts[2] || 'UNKNOWN';
   return rawId.replace(/tasmota_|shelly_|thermal_/gi, '').toUpperCase();
 };
 
-/**
- * CORE LOGIC: Processes incoming MQTT packets and updates individual sensor docs.
- */
-/**
- * CORE LOGIC: Processes incoming MQTT packets
- */
 async function processMqttMessage(topic, message, providersCol, templatesCol) {
   const top = topic.toUpperCase();
   const msgStr = message.toString().trim();
   
-  // 1. Filter out known non-JSON LWT messages immediately to keep logs clean
   if (msgStr === 'Online' || msgStr === 'Offline') {
     return; 
   }
 
   try {
-    // Attempt to parse the payload
     const payload = JSON.parse(msgStr);
     const shortId = getShortId(topic);
 
@@ -75,7 +59,6 @@ async function processMqttMessage(topic, message, providersCol, templatesCol) {
     }
 
     // --- CASE B: THERMAL CAMERA MATRIX ---
-    // Note: We use .includes and .endsWith to be robust
     if (top.includes('/THERMAL/') && top.endsWith('/IMG')) {
       const uniqueId = `${shortId}_THERMAL_CAMERA`.toUpperCase();
       
@@ -84,15 +67,13 @@ async function processMqttMessage(topic, message, providersCol, templatesCol) {
         {
           $set: {
             lastRun: new Date(),
-            latestData: sanitizeKeys(payload) // This handles both Object and Array
+            latestData: sanitizeKeys(payload)
           }
         }
       );
-      // Optional: console.log(`📸 [Thermal] Updated ${uniqueId}`);
     }
 
   } catch (e) {
-    // Only log error if it's a topic we expected to be JSON data
     if (top.includes('SENSOR') || top.includes('IMG')) {
       console.log(`⚠️ [MQTT] JSON Parse Error on ${topic}: ${e.message}`);
       console.log(`📝 [MQTT] Raw content attempt: ${msgStr.substring(0, 50)}...`);
@@ -100,9 +81,6 @@ async function processMqttMessage(topic, message, providersCol, templatesCol) {
   }
 }
 
-/**
- * Manages persistent connections to all unique brokers in the DB
- */
 async function syncLiveStreams(providersCol, templatesCol) {
   const activeProviders = await providersCol.find({}).toArray();
   
@@ -110,7 +88,6 @@ async function syncLiveStreams(providersCol, templatesCol) {
     const brokerUrl = provider.params?.broker || provider.params?.brokerUrl;
     if (!brokerUrl) continue;
 
-    // Create client if not exists for this specific broker
     if (!brokerClients.has(brokerUrl)) {
       console.log(`📡 [Live] Connecting to Broker: ${brokerUrl}`);
       
@@ -131,7 +108,6 @@ async function syncLiveStreams(providersCol, templatesCol) {
       subscribedTopics.set(brokerUrl, new Set());
     }
 
-    // Subscribe to topic on the correct broker
     const clientForBroker = brokerClients.get(brokerUrl);
     const topicsSet = subscribedTopics.get(brokerUrl);
 
@@ -143,11 +119,7 @@ async function syncLiveStreams(providersCol, templatesCol) {
   }
 }
 
-/**
- * Handle Auto-Discovery Command
- */
 async function handleDiscovery(doc, providersCol, templatesCol) {
-  // Support both doc.params and doc.data (based on previous logs)
   const discoveryParams = doc.params || doc.data?.params || doc.data;
   const { brokerUrl, username, password } = discoveryParams;
 
@@ -160,7 +132,6 @@ async function handleDiscovery(doc, providersCol, templatesCol) {
   return new Promise((resolve) => {
     scanner.on('connect', () => {
       console.log(`🔍 [Discovery] Connected to ${brokerUrl}. Subscribing...`);
-      // Subscribing to wildcards for both Tasmota and Thermal Cameras
       scanner.subscribe(['HS4U/tele/#', 'HS4U/thermal/#']);
     });
 
@@ -207,7 +178,6 @@ async function handleDiscovery(doc, providersCol, templatesCol) {
         }
 
         // --- 2. THERMAL CAMERA DISCOVERY ---
-        // Changed to .includes for broader matching in case of prefix variations
         if (top.includes('/THERMAL/') && top.endsWith('/IMG')) {
           console.log(`🎯 [Discovery] FOUND THERMAL CAMERA: ${topic}`);
           const uniqueId = `${shortId}_THERMAL_CAMERA`.toUpperCase();
@@ -234,7 +204,6 @@ async function handleDiscovery(doc, providersCol, templatesCol) {
         }
 
       } catch (e) {
-        // Only log parse errors for topics we actually care about
         if (top.includes('SENSOR') || top.includes('IMG')) {
             console.log(`⚠️ [Discovery] Failed to parse JSON on ${topic}`);
         }
@@ -251,7 +220,6 @@ async function handleDiscovery(doc, providersCol, templatesCol) {
 }
 
 async function handleCreateInstance(doc, providersCol, templatesCol) {
-  // CHANGE doc.params TO doc.data
   const { templateId, method, params } = doc.data; 
 
   if (!templateId || !method || !params) {

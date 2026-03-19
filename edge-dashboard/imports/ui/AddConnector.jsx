@@ -12,6 +12,10 @@ export default function AddConnector({ onComplete }) {
   const [selectedConsumerIds, setSelectedConsumerIds] = useState([]);
   const [consumerParams, setConsumerParams] = useState({});
 
+  // Validation feedback states
+  const [sensorLivenessError, setSensorLivenessError] = useState('');
+  const [consumerStatus, setConsumerStatus] = useState({}); // { consumerId: { loading, error, success } }
+
   const { liveSensors, parsers, consumers, managedClients, existingConnectors, isLoading } = useTracker(() => {
     const h1 = Meteor.subscribe('providers_status');
     const h2 = Meteor.subscribe('component_definitions');
@@ -32,7 +36,7 @@ export default function AddConnector({ onComplete }) {
   const sensor = liveSensors.find(s => s._id === selectedSensorId);
   const parser = parsers.find(p => p._id === selectedParserId);
 
-  const isSensorValid = id && !error && selectedSensorId;
+  const isSensorValid = id && !error && selectedSensorId && !sensorLivenessError;
   
   const compatibleParsers = parsers.filter(p => {
     if (!sensor) return false;
@@ -49,6 +53,26 @@ export default function AddConnector({ onComplete }) {
     );
   });
 
+  // Reusable Consumer Validation
+  const validateConsumerConnection = (consumerId, consumerName, params) => {
+    setConsumerStatus(prev => ({ ...prev, [consumerId]: { loading: true } }));
+    
+    Meteor.call('consumers.testConnection', {
+      type: consumerName,
+      params: params
+    }, (err, result) => {
+      const isOk = !err && result?.success;
+      setConsumerStatus(prev => ({
+        ...prev,
+        [consumerId]: {
+          loading: false,
+          success: isOk,
+          error: isOk ? '' : (err?.reason || result?.message || 'Connection Failed')
+        }
+      }));
+    });
+  };
+
   const handleIdChange = (e) => {
     const rawValue = e.target.value.toUpperCase();
     const filteredValue = rawValue.substring(0, 24).replace(/[^A-Z0-9_]/g, '');
@@ -57,24 +81,32 @@ export default function AddConnector({ onComplete }) {
     setError(isDuplicate ? 'NAME ALREADY IN USE' : '');
   };
 
-  const handleParamChange = (consumerName, paramName, value) => {
+  const handleParamChange = (consumerId, consumerName, paramName, value) => {
+    const newParams = { ...(prevParams = (consumerParams[consumerName] || {})), [paramName]: value };
     setConsumerParams(prev => ({
       ...prev,
-      [consumerName]: { ...(prev[consumerName] || {}), [paramName]: value }
+      [consumerName]: newParams
     }));
+    
+    // Trigger validation on manual change
+    validateConsumerConnection(consumerId, consumerName, newParams);
   };
 
-  const handleSelectManagedClient = (consumerName, clientId) => {
+  const handleSelectManagedClient = (consumerId, consumerName, clientId) => {
     if (!clientId) {
         setConsumerParams(prev => ({ ...prev, [consumerName]: {} }));
+        setConsumerStatus(prev => { const n = {...prev}; delete n[consumerId]; return n; });
         return;
     }
     const client = managedClients.find(c => c._id === clientId);
     if (client) {
+        const params = { ...client.params, _managedClientId: client._id };
         setConsumerParams(prev => ({
             ...prev,
-            [consumerName]: { ...client.params, _managedClientId: client._id }
+            [consumerName]: params
         }));
+        // Trigger validation on saved client selection
+        validateConsumerConnection(consumerId, consumerName, params);
     }
   };
 
@@ -109,7 +141,6 @@ export default function AddConnector({ onComplete }) {
     });
   };
 
-  // UI Helper for the grayed-out effect
   const getStageStyle = (isActive) => ({
     color: isActive ? '#c9d1d9' : '#8b949e',
     opacity: isActive ? 1 : 0.6,
@@ -126,7 +157,6 @@ export default function AddConnector({ onComplete }) {
 
       <form onSubmit={handleSubmit}>
         
-        {/* STEP 1: Always Active */}
         <div className="form-step-wrapper active">
           <label className="input-label">Connector Name</label>
           <input 
@@ -139,16 +169,23 @@ export default function AddConnector({ onComplete }) {
 
           <label className="input-label" style={{ marginTop: '15px' }}>1. Live Data Source</label>
           <select className="tech-select" value={selectedSensorId} onChange={e => {
-              setSelectedSensorId(e.target.value);
+              const val = e.target.value;
+              setSelectedSensorId(val);
+              
+              // Liveness Check
+              const selectedSensor = liveSensors.find(s => s._id === val);
+              const isLive = selectedSensor?.lastRun && selectedSensor.lastRun >= new Date(Date.now() - 35000);
+              setSensorLivenessError(val && !isLive ? 'This sensor is not currently publishing data.' : '');
+
               setSelectedParserId('');
               setSelectedConsumerIds([]);
           }}>
             <option value="">{liveSensors.length > 0 ? "Select Sensor..." : "No Available Sensors"}</option>
             {liveSensors.map(s => <option key={s._id} value={s._id}>{s.label} ({s.parentId})</option>)}
           </select>
+          {sensorLivenessError && <p className="error-text" style={{ fontSize: '11px', marginTop: '5px' }}>{sensorLivenessError}</p>}
         </div>
 
-        {/* STEP 2: Grayed out until Step 1 is valid */}
         <div className={`form-step-wrapper ${isSensorValid ? 'active' : 'locked'}`} style={getStageStyle(isSensorValid)}>
           <label className="input-label" style={{ color: 'inherit' }}>2. Data Parser</label>
           <select 
@@ -166,7 +203,6 @@ export default function AddConnector({ onComplete }) {
           </select>
         </div>
 
-        {/* STEP 3: Grayed out until Step 2 is valid */}
         <div className={`form-step-wrapper ${isParserValid ? 'active' : 'locked'}`} style={getStageStyle(isParserValid)}>
           <label className="input-label" style={{ color: 'inherit' }}>3. Data Consumers</label>
           <div className="checkbox-list">
@@ -174,6 +210,7 @@ export default function AddConnector({ onComplete }) {
             {isParserValid && compatibleConsumers.length === 0 && <p className="error-text">No Available Consumers</p>}
             {compatibleConsumers.map(c => {
               const relevantClients = managedClients.filter(mc => mc.templateName === c.name);
+              const status = consumerStatus[c._id];
               
               return (
                 <div key={c._id} className="consumer-item-wrapper" style={{ color: isParserValid ? 'inherit' : '#8b949e' }}>
@@ -188,17 +225,18 @@ export default function AddConnector({ onComplete }) {
                       }}
                     /> 
                     {c.label}
+                    {status?.loading && <span className="loading-spinner-inline" style={{ marginLeft: '10px', fontSize: '10px' }}>Checking...</span>}
+                    {status?.success && <span style={{ color: '#3fb950', marginLeft: '10px', fontSize: '10px' }}>✓ Available</span>}
                   </label>
 
                   {selectedConsumerIds.includes(c._id) && (relevantClients.length > 0 || (c.parameters && c.parameters.length > 0)) && (
                     <div className="consumer-params-box">
-                      {/* 1. Show Saved Clients Dropdown if they exist */}
                       {relevantClients.length > 0 && (
                         <div className="param-input-group" style={{ marginBottom: '15px', borderBottom: '1px solid #30363d', paddingBottom: '10px' }}>
                           <label className="param-label" style={{ color: '#58a6ff' }}>Use Saved Client</label>
                           <select 
                             className="tech-select-small"
-                            onChange={(e) => handleSelectManagedClient(c.name, e.target.value)}
+                            onChange={(e) => handleSelectManagedClient(c._id, c.name, e.target.value)}
                             value={consumerParams[c.name]?._managedClientId || ''}
                           >
                             <option value="">Manual configuration of consumer</option>
@@ -209,7 +247,6 @@ export default function AddConnector({ onComplete }) {
                         </div>
                       )}
 
-                      {/* 2. Show Manual Parameters if they exist */}
                       {c.parameters?.map(param => (
                         <div key={param.name} className="param-input-group">
                           <label className="param-label">{param.label}</label>
@@ -217,11 +254,12 @@ export default function AddConnector({ onComplete }) {
                             type={param.type || 'text'}
                             className="tech-input-small"
                             value={consumerParams[c.name]?.[param.name] || ''}
-                            onChange={(e) => handleParamChange(c.name, param.name, e.target.value)}
+                            onChange={(e) => handleParamChange(c._id, c.name, param.name, e.target.value)}
                             disabled={!!consumerParams[c.name]?._managedClientId} 
                           />
                         </div>
                       ))}
+                      {status?.error && <p className="error-text" style={{ fontSize: '10px', marginTop: '8px' }}>{status.error}</p>}
                     </div>
                   )}
                 </div>

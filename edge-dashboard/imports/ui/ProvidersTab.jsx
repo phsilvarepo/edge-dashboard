@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Meteor } from 'meteor/meteor';
 import { ProvidersStatus, ComponentDefinitions, ProvidersTemplate } from '/imports/api/collections';
 import './Tabs.css';
-import { useTracker } from 'meteor/react-meteor-data';
+import { useTracker } from 'meteor/react-meteor-data'
 
 // Configuration for input fields
 const CAPTURE_CONFIGS = {
@@ -27,32 +27,24 @@ const CAPTURE_CONFIGS = {
 };
 
 export default function ProvidersTab() {
-  // Discovery & Global States
+  // --- 1. STATES ---
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [showDiscModal, setShowDiscModal] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [connectionError, setConnectionError] = useState(null);
   const [mqttConfig, setMqttConfig] = useState({ brokerUrl: '', username: '', password: '' });
 
-  // Inspector & Info States
   const [selectedSensor, setSelectedSensor] = useState(null);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   
-  // Creation Wizard States
   const [wizardTemplate, setWizardTemplate] = useState(null);
   const [wizardData, setWizardData] = useState({ method: '', params: {} });
 
-  // --- HEARTBEAT TIMER ---
-  // This state forces a re-render every 10 seconds to refresh the "Online" status
+  const [waitingForId, setWaitingForId] = useState(null);
+  const [successMsg, setSuccessMsg] = useState(null);
   const [now, setNow] = useState(Date.now());
 
-  useEffect(() => {
-    const heartbeat = setInterval(() => {
-      setNow(Date.now());
-    }, 10000); // Check every 10 seconds
-    return () => clearInterval(heartbeat);
-  }, []);
-
+  // --- 2. DATA TRACKING ---
   const { providers, templates, definitions, isLoading } = useTracker(() => {
     const sub1 = Meteor.subscribe('providers_status');
     const sub2 = Meteor.subscribe('component_definitions');
@@ -66,6 +58,24 @@ export default function ProvidersTab() {
     };
   });
 
+  // --- 3. EFFECTS ---
+  useEffect(() => {
+    const heartbeat = setInterval(() => setNow(Date.now()), 10000);
+    return () => clearInterval(heartbeat);
+  }, []);
+
+  useEffect(() => {
+    if (waitingForId) {
+      const found = providers.find(p => p.id === waitingForId);
+      if (found) {
+        setSuccessMsg(`${found.label || found.id} is now Online!`);
+        setWaitingForId(null); 
+        setTimeout(() => setSuccessMsg(null), 5000); 
+      }
+    }
+  }, [providers, waitingForId]);
+
+  // --- 4. ACTION HANDLERS ---
   const handleStartWizard = (t) => {
     const methods = t.supportedMethods || [];
     const defaultMethod = methods.length > 0 ? methods[0] : 'MQTT_TASMOTA';
@@ -73,23 +83,31 @@ export default function ProvidersTab() {
     setWizardData({ method: defaultMethod, params: {} });
   };
 
-  /**
-   * Action: Create Instance
-   */
   const handleCreateInstance = () => {
     const config = CAPTURE_CONFIGS[wizardData.method];
     const missing = config.fields.find(f => !wizardData.params[f.id]);
     if (missing) return alert(`Please enter ${missing.label}`);
+
+    const mqttTopic = wizardData.params.topic;
+    const parts = mqttTopic.split('/');
+    const rawId = parts[2] || 'UNKNOWN';
+    const shortId = rawId.replace(/tasmota_|shelly_|thermal_/gi, '').toUpperCase();
+    const expectedId = `${shortId}_${wizardTemplate.name}`.toUpperCase();
+
+    const currentLabel = wizardTemplate.label;
+    setWizardTemplate(null); 
+    setSuccessMsg(`⏳ Linking ${currentLabel}... Waiting for first packet.`);
+    setWaitingForId(expectedId); 
 
     Meteor.call('providers.createInstance', {
       templateId: wizardTemplate._id,
       method: wizardData.method,
       params: wizardData.params
     }, (err) => {
-      if (err) alert("Error: " + err.reason);
-      else {
-        setWizardTemplate(null);
-        alert("Sensor linked! Waiting for first data packet...");
+      if (err) {
+        alert("Error: " + err.reason);
+        setSuccessMsg(null);
+        setWaitingForId(null);
       }
     });
   };
@@ -103,13 +121,17 @@ export default function ProvidersTab() {
     }
   };
 
-  /**
-   * Action: Auto-Discovery
-   */
+  const handleClearAll = () => {
+    if (window.confirm("⚠️ This will disconnect ALL active providers. Continue?")) {
+      Meteor.call('providers.removeAll', (err) => {
+        if (err) alert("Failed to clear: " + err.reason);
+      });
+    }
+  };
+
   const handleDiscovery = () => {
     setConnectionError(null);
     setIsTesting(true);
-
     Meteor.call('providers.autoDiscover', mqttConfig, (err) => {
       setIsTesting(false);
       if (err) { 
@@ -122,12 +144,7 @@ export default function ProvidersTab() {
     });
   };
 
-  // Uses the current 'now' state refreshed by the timer
-  const isOnline = (lastRun) => {
-    if (!lastRun) return false;
-    return lastRun >= new Date(now - 35000);
-  };
-  
+  const isOnline = (lastRun) => lastRun && lastRun >= new Date(now - 35000);
   const getLabel = (p) => {
     const def = definitions.find(d => d.name === p.provider);
     return def ? def.label : `${p.provider} (${p.parentId})`; 
@@ -137,15 +154,9 @@ export default function ProvidersTab() {
     if (!data) return 'WAITING...';
     const entries = Object.entries(data);
     if (entries.length === 0) return 'EMPTY';
-    
     let [key, val] = entries[0];
     const displayKey = key.replace(/_/g, '.');
-
-    if (Array.isArray(val)) {
-      const rows = val.length;
-      const cols = val[0]?.length || 0;
-      return `${displayKey}: [${rows}x${cols} Matrix]`;
-    }
+    if (Array.isArray(val)) return `${displayKey}: [${val.length}x${val[0]?.length || 0} Matrix]`;
     return `${displayKey}: ${val}`;
   };
 
@@ -153,16 +164,32 @@ export default function ProvidersTab() {
 
   return (
     <div className="tab-container">
-      {/* --- ACTIVE PROVIDERS SECTION --- */}
+      {successMsg && (
+        <div style={{ background: waitingForId ? '#af8600' : '#238636', color: 'white', padding: '12px', borderRadius: '6px', marginBottom: '20px', textAlign: 'center', fontWeight: 'bold' }}>
+          {successMsg}
+        </div>
+      )}
+
       <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>DATA PROVIDERS</h2>
-        <button className={`btn-primary ${isDiscovering ? 'pulse' : ''}`} onClick={() => {
-          setMqttConfig({ brokerUrl: '', username: '', password: '' });
-          setConnectionError(null);
-          setShowDiscModal(true);
-        }}>
-          {isDiscovering ? 'SCANNING HUB...' : 'AUTO-DISCOVERY'}
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          {providers.length > 0 && (
+            <button 
+              className="btn-secondary" 
+              onClick={handleClearAll} 
+              style={{ background: '#da3633', color: '#ffffff', border: 'none', padding: '0 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+            >
+              CLEAR ALL
+            </button>
+          )}
+          <button className={`btn-primary ${isDiscovering ? 'pulse' : ''}`} onClick={() => {
+            setMqttConfig({ brokerUrl: '', username: '', password: '' });
+            setConnectionError(null);
+            setShowDiscModal(true);
+          }}>
+            {isDiscovering ? 'SCANNING HUB...' : 'AUTO-DISCOVERY'}
+          </button>
+        </div>
       </div>
 
       <div className="status-grid">
@@ -174,7 +201,6 @@ export default function ProvidersTab() {
                 <h4 style={{ color: '#58a6ff', textTransform: 'uppercase', letterSpacing: '1px' }}>{getLabel(p)}</h4>
                 <div className={`pulse-dot ${active ? 'active' : ''}`}></div>
               </div>
-              
               <div className="status-meta">
                 <div className="meta-item" style={{ background: '#0d1117', padding: '6px', borderRadius: '4px', marginBottom: '8px' }}>
                   <span>{active ? 'LIVE DATA' : 'LAST DATA'}</span>
@@ -189,7 +215,6 @@ export default function ProvidersTab() {
             </div>
           );
         })}
-
         {providers.length === 0 && (
           <div className="hint" style={{ gridColumn: '1/-1', textAlign: 'center', padding: '40px', border: '1px dashed #30363d' }}>
             NO PROVIDERS DETECTED. CLICK AUTO-DISCOVERY TO FIND PROVIDERS.
@@ -199,11 +224,10 @@ export default function ProvidersTab() {
 
       <hr style={{ border: 'none', borderTop: '1px solid #30363d', margin: '40px 0' }} />
 
-      {/* --- PROVIDER TEMPLATES SECTION --- */}
       <div className="section-header"><h2>PROVIDER TEMPLATES</h2></div>
-      <div className="template-list" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <div className="template-list">
         {templates.map(t => (
-          <div key={t._id} className="template-item clickable" onClick={() => setSelectedTemplate(t)} style={{ background: '#161b22', border: '1px solid #30363d', padding: '15px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div key={t._id} className="template-item clickable" onClick={() => setSelectedTemplate(t)} style={{ background: '#161b22', border: '1px solid #30363d', padding: '15px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <strong style={{ color: '#c9d1d9' }}>{t.label || t.name}</strong>
@@ -213,12 +237,34 @@ export default function ProvidersTab() {
               </div>
               <p style={{ margin: '5px 0 0 0', fontSize: '13px', color: '#8b949e' }}>{t.description || 'No description provided.'}</p>
             </div>
-            <button className="add-instance-btn" onClick={(e) => { e.stopPropagation(); handleStartWizard(t); }}>+</button>
+            <button 
+              className="add-instance-btn" 
+              onClick={(e) => { e.stopPropagation(); handleStartWizard(t); }}
+              style={{ background: '#238636', color: 'white', width: '38px', borderRadius: '6px', border: 'none', fontSize: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              +
+            </button>
           </div>
         ))}
       </div>
 
-      {/* --- WIZARD CONFIG MODAL --- */}
+      {/* --- MODALS --- */}
+
+      {/* Template Info Modal */}
+      {selectedTemplate && (
+        <div className="modal-overlay" onClick={() => setSelectedTemplate(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header"><h3>{selectedTemplate.label} DETAILS</h3><button className="close-btn" onClick={() => setSelectedTemplate(null)}>×</button></div>
+            <div className="modal-body">
+               <p>{selectedTemplate.description}</p>
+               <div className="input-group"><label>DRIVER NAME</label><div className="mono-text">{selectedTemplate.name}</div></div>
+               <button className="start-scan-btn" style={{ marginTop: '20px' }} onClick={() => { handleStartWizard(selectedTemplate); setSelectedTemplate(null); }}>START WIZARD</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Wizard Modal */}
       {wizardTemplate && (
         <div className="modal-overlay">
           <div className="modal-content discovery-modal" style={{ maxWidth: '450px' }}>
@@ -246,7 +292,7 @@ export default function ProvidersTab() {
         </div>
       )}
 
-      {/* --- SENSOR DETAIL POPUP (INSPECTOR) --- */}
+      {/* Sensor Inspector Modal */}
       {selectedSensor && (
         <div className="modal-overlay" onClick={() => setSelectedSensor(null)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -270,7 +316,7 @@ export default function ProvidersTab() {
         </div>
       )}
 
-      {/* --- DISCOVERY CONFIG MODAL --- */}
+      {/* Discovery Modal */}
       {showDiscModal && (
         <div className="modal-overlay" onClick={() => !isTesting && setShowDiscModal(false)}>
           <div className="modal-content discovery-modal" onClick={e => e.stopPropagation()}>
