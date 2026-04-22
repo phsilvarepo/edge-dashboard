@@ -34,6 +34,10 @@ export default function ProvidersTab() {
   const [connectionError, setConnectionError] = useState(null);
   const [mqttConfig, setMqttConfig] = useState({ brokerUrl: '', username: '', password: '' });
 
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(0);
+  const ITEMS_PER_PAGE = 6;
+
   const [selectedSensor, setSelectedSensor] = useState(null);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   
@@ -46,7 +50,7 @@ export default function ProvidersTab() {
 
   // --- 2. DATA TRACKING ---
   const { providers, templates, definitions, isLoading } = useTracker(() => {
-    const sub1 = Meteor.subscribe('providers_status');
+    const sub1 = Meteor.subscribe('active_providers');
     const sub2 = Meteor.subscribe('component_definitions');
     const sub3 = Meteor.subscribe('providers_template');
     
@@ -57,6 +61,22 @@ export default function ProvidersTab() {
       isLoading: !sub1.ready() || !sub2.ready() || !sub3.ready(),
     };
   });
+
+  // --- 3. FILTERING & PAGINATION LOGIC ---
+  const filteredTemplates = templates.filter(t => 
+    (t.label || t.name).toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (t.description || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const pageCount = Math.ceil(filteredTemplates.length / ITEMS_PER_PAGE);
+  const displayedTemplates = filteredTemplates.slice(
+    currentPage * ITEMS_PER_PAGE, 
+    (currentPage + 1) * ITEMS_PER_PAGE
+  );
+
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [searchTerm]);
 
   // --- 3. EFFECTS ---
   useEffect(() => {
@@ -175,9 +195,18 @@ export default function ProvidersTab() {
         <div style={{ display: 'flex', gap: '10px' }}>
           {providers.length > 0 && (
             <button 
-              className="btn-secondary" 
+              className="btn-primary" // Added this class
               onClick={handleClearAll} 
-              style={{ background: '#da3633', color: '#ffffff', border: 'none', padding: '0 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+              style={{ 
+                background: '#da3633', 
+                color: '#ffffff', 
+                border: 'none', 
+                padding: '0 15px', 
+                borderRadius: '4px', 
+                cursor: 'pointer', 
+                fontWeight: 'bold',
+                height: '34px' // Match height of the discovery button
+              }}
             >
               CLEAR ALL
             </button>
@@ -216,36 +245,115 @@ export default function ProvidersTab() {
           );
         })}
         {providers.length === 0 && (
-          <div className="hint" style={{ gridColumn: '1/-1', textAlign: 'center', padding: '40px', border: '1px dashed #30363d' }}>
-            NO PROVIDERS DETECTED. CLICK AUTO-DISCOVERY TO FIND PROVIDERS.
+          <div className="provider-empty-state-simple">
+            <h3>No Providers Active</h3>
+            <p>Use Auto-Discovery to scan your hub or manually link a template below.</p>
           </div>
         )}
       </div>
 
       <hr style={{ border: 'none', borderTop: '1px solid #30363d', margin: '40px 0' }} />
 
-      <div className="section-header"><h2>PROVIDER TEMPLATES</h2></div>
+      <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h2>PROVIDER TEMPLATES</h2>
+        <div className="search-container" style={{ 
+          position: 'relative', 
+          width: '100%',       
+          maxWidth: '300px',   
+          marginLeft: '10px'   
+        }}>
+          <input 
+            type="text" 
+            placeholder="Search templates..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="discovery-input"
+             maxLength={20}
+            style={{ 
+              width: '100%', 
+              padding: '8px 12px', 
+              fontSize: '13px',
+              boxSizing: 'border-box'
+            }}
+          />
+          {searchTerm && (
+            <button 
+              onClick={() => setSearchTerm('')}
+              style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#8b949e', cursor: 'pointer' }}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="template-list">
-        {templates.map(t => (
-          <div key={t._id} className="template-item clickable" onClick={() => setSelectedTemplate(t)} style={{ background: '#161b22', border: '1px solid #30363d', padding: '15px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+        {displayedTemplates.map(t => (
+          <div key={t._id} className="template-item clickable" onClick={() => setSelectedTemplate(t)}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <strong style={{ color: '#c9d1d9' }}>{t.label || t.name}</strong>
+                <strong className="template-title" style={{ color: '#c9d1d9' }}>{t.label || t.name}</strong>
                 {t.supportedMethods?.map(m => (
-                  <span key={m} className="tag" style={{ fontSize: '9px', background: '#238636', padding: '2px 6px', borderRadius: '10px', color: 'white' }}>{m.replace('MQTT_', '')}</span>
+                  <span key={m} className="tag" style={{ fontSize: '9px', background: '#238636', padding: '2px 6px', borderRadius: '10px', color: 'white' }}>
+                    {m.replace('MQTT_', '')}
+                  </span>
                 ))}
               </div>
-              <p style={{ margin: '5px 0 0 0', fontSize: '13px', color: '#8b949e' }}>{t.description || 'No description provided.'}</p>
+              <p style={{ margin: '5px 0 0 0', fontSize: '13px', color: '#8b949e' }}>{t.description || 'No description.'}</p>
             </div>
-            <button 
-              className="add-instance-btn" 
-              onClick={(e) => { e.stopPropagation(); handleStartWizard(t); }}
-              style={{ background: '#238636', color: 'white', width: '38px', borderRadius: '6px', border: 'none', fontSize: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
+            <button className="add-instance-btn" onClick={(e) => { e.stopPropagation(); handleStartWizard(t); }}>
               +
             </button>
           </div>
         ))}
+
+        {filteredTemplates.length === 0 && (
+          <div className="hint" style={{ textAlign: 'center', padding: '20px' }}>
+            No templates match "{searchTerm}"
+          </div>
+        )}
+      </div>
+
+      {/* Pagination Controls - Container is ALWAYS here to preserve height */}
+      <div className="pagination" style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        gap: '16px', 
+        marginTop: '30px',
+        padding: '10px 0',
+        borderTop: '1px solid #30363d',
+        minHeight: '45px',
+        opacity: pageCount > 1 ? 1 : 0,
+        pointerEvents: pageCount > 1 ? 'auto' : 'none'
+      }}>
+        <button 
+          disabled={currentPage === 0} 
+          onClick={() => setCurrentPage(p => p - 1)}
+          className="page-nav-btn"
+        >
+          ← <span style={{ marginLeft: '6px' }}>Prev</span>
+        </button>
+
+        <div style={{ 
+          fontSize: '12px', 
+          color: '#8b949e', 
+          letterSpacing: '1px',
+          textTransform: 'uppercase',
+          fontWeight: '500'
+        }}>
+          <span style={{ color: '#c9d1d9' }}>{currentPage + 1}</span> 
+          <span style={{ margin: '0 8px', opacity: 0.5 }}>/</span> 
+          {pageCount || 1} 
+        </div>
+
+        <button 
+          disabled={currentPage >= pageCount - 1} 
+          onClick={() => setCurrentPage(p => p + 1)}
+          className="page-nav-btn"
+        >
+          <span style={{ marginRight: '6px' }}>Next</span> →
+        </button>
       </div>
 
       {/* --- MODALS --- */}
@@ -258,7 +366,7 @@ export default function ProvidersTab() {
             <div className="modal-body">
                <p>{selectedTemplate.description}</p>
                <div className="input-group"><label>DRIVER NAME</label><div className="mono-text">{selectedTemplate.name}</div></div>
-               <button className="start-scan-btn" style={{ marginTop: '20px' }} onClick={() => { handleStartWizard(selectedTemplate); setSelectedTemplate(null); }}>START WIZARD</button>
+               <button className="start-scan-btn" style={{ marginTop: '20px' }} onClick={() => { handleStartWizard(selectedTemplate); setSelectedTemplate(null); }}>FIND SENSOR</button>
             </div>
           </div>
         </div>

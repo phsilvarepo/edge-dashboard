@@ -1,7 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { ProvidersStatus, ParsersStatus, ConsumersStatus, ProvidersTemplate, ConsumerClients, Connectors, ComponentDefinitions, MqttCommands} from '/imports/api/collections';
 
-Meteor.publish('providers_status', function () {
+Meteor.publish('active_providers', function () {
   return ProvidersStatus.find();
 });
 

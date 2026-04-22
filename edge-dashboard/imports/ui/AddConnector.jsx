@@ -14,10 +14,10 @@ export default function AddConnector({ onComplete }) {
 
   // Validation feedback states
   const [sensorLivenessError, setSensorLivenessError] = useState('');
-  const [consumerStatus, setConsumerStatus] = useState({}); // { consumerId: { loading, error, success } }
+  const [consumerStatus, setConsumerStatus] = useState({});
 
   const { liveSensors, parsers, consumers, managedClients, existingConnectors, isLoading } = useTracker(() => {
-    const h1 = Meteor.subscribe('providers_status');
+    const h1 = Meteor.subscribe('active_providers');
     const h2 = Meteor.subscribe('component_definitions');
     const h3 = Meteor.subscribe('connectors');
     const h4 = Meteor.subscribe('consumer_clients'); 

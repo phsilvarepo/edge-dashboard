@@ -62,8 +62,9 @@ export default function ParsersTab() {
         })}
 
         {parsers.length === 0 && (
-          <div className="hint" style={{ gridColumn: '1/-1', textAlign: 'center'}}>
-            NO PARSERS ACTIVE
+          <div className="provider-empty-state-simple">
+            <h3>No Parsers Active</h3>
+            <p>The processing engine is idle. Go to Pipelines tab to deploy real-time parsing.</p>
           </div>
         )}
       </div>

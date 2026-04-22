@@ -243,6 +243,17 @@
   border-color: #8b949e;
 }
 
+.btn-primary:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border-color: #8b949e;
+}
+
+.btn-primary[style*="background: rgb(218, 54, 51)"]:hover,
+.btn-primary[style*="background: #da3633"]:hover {
+  background-color: #f85149 !important;
+  border-color: #f85149 !important;
+}
+
 .btn-primary:disabled {
   background-color: #21262d;
   color: #8b949e;
@@ -272,3 +283,231 @@
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
 }
+
+.template-item {
+  background: #161b22;
+  border: 1px solid #30363d;
+  padding: 15px;
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  transition: all 0.2s ease;
+}
+
+.template-item.clickable {
+  cursor: pointer;
+}
+
+.template-list {
+  /* 6 items * 84px height = 504px â€” fixed, never shrinks */
+  height: 504px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  overflow: visible;
+}
+
+/* Empty state fills the entire fixed height so nothing shifts */
+.template-list .hint {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  color: #8b949e;
+  font-size: 13px;
+}
+
+.template-item.clickable:hover {
+  border-color: #58a6ff;
+  background: #1c2128;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.template-item.clickable:hover strong {
+  color: #58a6ff !important;
+}
+
+.add-instance-btn {
+  background: #238636;
+  color: white;
+  width: 38px;
+  height: 38px;
+  border-radius: 6px;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.add-instance-btn:hover {
+  background: #2ea043;
+  transform: scale(1.05);
+}
+
+.page-nav-btn {
+  background: transparent;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+}
+
+.page-nav-btn:hover:not(:disabled) {
+  background: #21262d;
+  border-color: #8b949e;
+  color: #58a6ff;
+}
+
+.page-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  border-color: transparent;
+}
+
+.pagination {
+  min-height: 45px;
+}
+
+.provider-empty-state-simple {
+  grid-column: 1/-1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  text-align: center;
+  
+  /* The Gridded Background */
+  background-color: #0d1117;
+  background-image: 
+    linear-gradient(rgba(48, 54, 61, 0.3) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(48, 54, 61, 0.3) 1px, transparent 1px);
+  background-size: 40px 40px; /* Size of the grid squares */
+  
+  /* The Rounded Border */
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  
+  /* Optional: a subtle inner glow to make it pop */
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.5);
+}
+
+.provider-empty-state-simple h3 {
+  color: #ffffff; /* White */
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 10px 0;
+  z-index: 1; /* Ensure text stays above grid lines */
+}
+
+.provider-empty-state-simple p {
+  color: #8b949e; /* Gray */
+  font-size: 14px;
+  margin: 0;
+  max-width: 450px;
+  line-height: 1.5;
+  z-index: 1;
+}
+
+/* Container for the cards */
+.managed-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  width: 100%;
+}
+
+.managed-card {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+}
+
+.managed-card:hover {
+  border-color: #444c56;
+}
+
+/* Header Area of Card */
+.managed-card-main {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.managed-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.managed-template-tag {
+  font-size: 10px;
+  font-family: monospace;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.managed-label {
+  color: #58a6ff;
+  font-size: 16px;
+  margin-top: 4px;
+}
+
+/* Status indicator inside the card */
+.managed-status-bar {
+  font-size: 11px;
+  font-weight: bold;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #0d1117;
+  color: #8b949e;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.managed-status-bar.verifying { color: #58a6ff; border: 1px solid rgba(88, 166, 255, 0.3); }
+.managed-status-bar.success { color: #3fb950; border: 1px solid rgba(63, 185, 80, 0.3); }
+.managed-status-bar.error { color: #f85149; border: 1px solid rgba(248, 81, 73, 0.3); }
+
+/* Bottom Action Bar */
+.managed-card-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 1px solid #30363d;
+  background: #0d1117;
+}
+
+.action-btn {
+  background: transparent;
+  border: none;
+  padding: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #c9d1d9;
+  transition: background 0.2s;
+}
+
+.action-btn:first-child { border-right: 1px solid #30363d; }
+
+.action-btn.test:hover:not(:disabled) { background: rgba(88, 166, 255, 0.1); color: #58a6ff; }
+.action-btn.remove:hover { background: rgba(248, 81, 73, 0.1); color: #f85149; }
+.action-btn:disabled { cursor: not-allowed; opacity: 0.5; }

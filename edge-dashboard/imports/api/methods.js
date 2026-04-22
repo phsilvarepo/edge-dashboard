@@ -4,213 +4,37 @@ import mqtt from 'mqtt';
 import * as Minio from 'minio';
 import { Connectors, ParsersStatus, ProvidersStatus, ProvidersTemplate, ConsumerClients, ConsumersStatus, MqttCommands} from './collections';
 
-let globalMqttClient = null;
-let isDiscoveryActive = false; 
-
-const PARSE_STRATEGY = {
-  MQTT_TASMOTA: {
-    getDeviceId: (input) => {
-      const parts = input.split('/');
-      return parts.find(p => p.toLowerCase().startsWith('tasmota')) || parts[2] || input;
-    },
-    getSearchArea: (payload) => (payload.sn ? { ...payload.sn, ...payload } : payload),
-    fixTopic: (input) => {
-      return input.toUpperCase().endsWith('/SENSOR') ? input : `${input}/SENSOR`;
-    }
-  },
-  MQTT_SHELLY: {
-    getDeviceId: (input) => {
-      const parts = input.split('/');
-      return parts.find(p => p.toLowerCase().includes('thermal') || p.toLowerCase().includes('shelly')) || parts[2] || parts[1] || input;
-    },
-    getSearchArea: (payload) => {
-      return Array.isArray(payload) ? { IMG: payload } : payload;
-    },
-    fixTopic: (input) => {
-      const clean = input.toUpperCase();
-      if (clean.startsWith('HS4U/THERMAL/') && !clean.endsWith('/IMG')) {
-        return `${input}/IMG`;
-      }
-      return input;
-    }
-  }
-};
-
-const sanitizeKeys = (obj) => {
-  if (typeof obj !== 'object' || obj === null) return obj;
-  const newObj = Array.isArray(obj) ? [] : {};
-  Object.keys(obj).forEach(key => {
-    const cleanKey = key.replace(/\./g, '_'); 
-    newObj[cleanKey] = sanitizeKeys(obj[key]);
-  });
-  return newObj;
-};
-
-const handleMqttMessage = async (topic, message) => {
-  try {
-    const rawMessage = message.toString();
-    const top = topic.toUpperCase();
-    const parts = topic.split('/');
-
-    if (top.endsWith('/LWT') || top.endsWith('/STATE')) return;
-
-    let payload;
-    try { payload = JSON.parse(rawMessage); } catch (e) { payload = rawMessage; }
-
-    if (top.startsWith('HS4U/THERMAL/')) {
-      const sensorKey = parts[3]; 
-      if (!sensorKey || sensorKey.toUpperCase() !== 'IMG') return;
-
-      const deviceId = PARSE_STRATEGY.MQTT_SHELLY.getDeviceId(topic);
-      const shortId = deviceId.replace(/thermal_|shelly_/gi, '').toUpperCase();
-      const uniqueId = `${shortId}_THERMAL CAMERA`.toUpperCase(); 
-
-      const existing = await ProvidersStatus.findOneAsync(uniqueId);
-      if (!existing && !isDiscoveryActive) return;
-
-      const cleanData = sanitizeKeys(payload);
-
-      await ProvidersStatus.upsertAsync(
-        { _id: uniqueId },
-        {
-          $set: {
-            id: uniqueId,
-            provider: 'THERMAL CAMERA',
-            label: existing ? existing.label : `Thermal Matrix`,
-            captureMethod: 'MQTT_SHELLY',
-            topic: topic,
-            lastRun: new Date(),
-            latestData: cleanData, 
-            parentId: shortId,
-            dataType: 'image_matrix' 
-          }
-        }
-      );
-      return; 
-    }
-
-    if (top.startsWith('HS4U/TELE/')) {
-      if (!top.endsWith('/SENSOR')) return;
-
-      const deviceId = PARSE_STRATEGY.MQTT_TASMOTA.getDeviceId(topic);
-      const shortId = deviceId.replace(/tasmota_/gi, '').toUpperCase();
-      
-      const strategy = PARSE_STRATEGY.MQTT_TASMOTA;
-      const searchArea = strategy.getSearchArea(payload);
-
-      for (const key of Object.keys(searchArea)) {
-        if (['Time', 'TempUnit'].includes(key)) continue;
-
-        const template = await ProvidersTemplate.findOneAsync({ name: key });
-        if (!template) continue;
-        
-        const uniqueId = `${shortId}_${key}`.toUpperCase();
-        const existing = await ProvidersStatus.findOneAsync(uniqueId);
-        if (!existing && !isDiscoveryActive) continue;
-
-        await ProvidersStatus.upsertAsync(
-          { _id: uniqueId },
-          {
-            $set: {
-              id: uniqueId,
-              templateId: template._id,
-              provider: key,
-              label: template.label,
-              captureMethod: 'MQTT_TASMOTA',
-              topic: topic,
-              lastRun: new Date(),
-              latestData: sanitizeKeys(searchArea[key]), 
-              parentId: shortId,
-              dataType: 'json'
-            }
-          }
-        );
-      }
-    }
-  } catch (e) { 
-    console.error("❌ MQTT Handler Failure:", e);
-  }
-};
-
 Meteor.methods({
-  async 'providers.createInstance'({ templateId, method, params }) {
-    check(templateId, String);
-    check(method, String);
-    check(params, Object);
-
-    const template = await ProvidersTemplate.findOneAsync(templateId);
-    if (!template) throw new Meteor.Error('not-found', 'Template not found');
-
-    const strategy = PARSE_STRATEGY[method];
-    const computedTopic = strategy.fixTopic(params.topic || params.deviceId);
-    const rawDeviceId = strategy.getDeviceId(computedTopic);
-    const parentId = rawDeviceId.replace(/tasmota_|shelly_|thermal_/gi, '').toUpperCase();
-    
-    const instanceId = `${parentId}_${template.name}`.toUpperCase();
-
-    const setupClient = (client) => {
-        client.subscribe(computedTopic);
-        if (method === 'MQTT_TASMOTA') {
-          client.publish(`HS4U/cmnd/${rawDeviceId}/status`, '8');
-        }
-    };
-
-    if (!globalMqttClient || !globalMqttClient.connected) {
-      globalMqttClient = mqtt.connect(params.broker, {
-        username: params.username || '',
-        password: params.pass || '',
-        connectTimeout: 5000,
-      });
-      globalMqttClient.on('connect', () => setupClient(globalMqttClient));
-      globalMqttClient.on('message', (t, m) => handleMqttMessage(t, m));
-    } else {
-      setupClient(globalMqttClient);
-    }
-
-    return await ProvidersStatus.upsertAsync(
-      { _id: instanceId },
-      {
-        $set: {
-          id: instanceId,
-          templateId: template._id,
-          provider: template.name,
-          label: template.label,
-          captureMethod: method,
-          topic: computedTopic,
-          params: params,
-          lastRun: new Date(),
-          latestData: { status: "Linked, awaiting data..." },
-          parentId: parentId,
-          dataType: template.outputType || 'json'
-        }
-      }
-    );
-  },
-
+  //Method to remove Provider from collection
   async 'providers.removeInstance'(instanceId) {
     check(instanceId, String);
     return await ProvidersStatus.removeAsync(instanceId);
   },
 
+  //Method to add Connector to collection
   async 'connectors.insert'(connector) {
     check(connector, Object);
     return await Connectors.insertAsync({ ...connector, enabled: true, createdAt: new Date() });
   },
 
+  //Method to remove Connector from collection
   async 'connectors.remove'(id) {
     check(id, String);
     return await Connectors.removeAsync(id);
   },
 
+  //Method to all Connector from collection
   async 'connectors.removeAll'() {
     return await Connectors.removeAsync({});
   },
 
+  //Method remove Parser based on specific Connector
   async 'parsers.removeByConnector'(connectorName) {
     check(connectorName, String);
     return await ParsersStatus.removeAsync({ connector: connectorName });
   },
 
+  //Add consumer to collection to store useful Consumers
   async 'consumers.saveClient'({ templateName, params, label }) {
     check(templateName, String);
     check(params, Object);
@@ -222,16 +46,19 @@ Meteor.methods({
     );
   },
 
+  // Remove client from collection
   async 'consumers.removeClient'(clientId) {
     check(clientId, String);
     return await ConsumerClients.removeAsync(clientId);
   },
 
+  //Remove Consumer based on a specific Connector
   async 'consumers.removeByConnector'(connectorName) {
     check(connectorName, String);
     return await ConsumersStatus.removeAsync({ connector: connectorName });
   },
 
+  //Check Consumers connection 
   async 'consumers.testConnection'({ type, params }) {
     check(type, String);
     check(params, Object);
@@ -321,6 +148,7 @@ Meteor.methods({
     return await runTest();
   },
 
+  //Method to add flag worker to perform auto Discovery
   async 'providers.autoDiscover'(config) {
     console.log("📡 [Server] Method 'providers.autoDiscover' called with:", config);
     
@@ -347,8 +175,8 @@ Meteor.methods({
     }
   },
 
+  //Method to add flag worker to create Sensor
   'providers.createInstance'({ templateId, method, params }) {
-    // Drop a request for a persistent live stream
     return MqttCommands.insertAsync({
       type: 'CREATE_INSTANCE',
       data: { templateId, method, params },
@@ -357,6 +185,7 @@ Meteor.methods({
     });
   },
 
+  //Method to remove all Providers
   async 'providers.removeAll'() {
     return await ProvidersStatus.removeAsync({});
   }
