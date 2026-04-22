@@ -273,7 +273,7 @@ async function run() {
   await client.connect();
   const db = client.db();
   const commandsCol = db.collection('mqtt_commands');
-  const providersCol = db.collection('providers_status');
+  const providersCol = db.collection('active_providers');
   const templatesCol = db.collection('providers_template');
 
   console.log("🚀 MQTT Worker Started. Multi-Broker + Granular Sensors Active.");

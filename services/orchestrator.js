@@ -14,7 +14,7 @@ async function run() {
   
   const connectorsCol = db.collection('connectors');
   const definitionsCol = db.collection('component_definitions');
-  const providersCol = db.collection('providers_status');
+  const providersCol = db.collection('active_providers');
 
   console.log("🚀 CONNECTOR ENGINE ONLINE");
   console.log("Listening for new or updated connectors...");
@@ -40,7 +40,7 @@ async function run() {
       });
 
       if (!providerDoc || !providerDoc.latestData) {
-        console.warn(`⚠️ No live data found in providers_status for topic: ${connector.providerOptions?.topic}`);
+        console.warn(`⚠️ No live data found in active_providers for topic: ${connector.providerOptions?.topic}`);
         return;
       }
 
