@@ -7,6 +7,9 @@ import './Dashboard.css';
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('connectors');
+  
+  // This state holds the Sensor ID when jumping from the Providers Tab
+  const [preselectedSensorId, setPreselectedSensorId] = useState(null);
 
   const navItems = [
     { id: 'providers', label: 'Providers' },
@@ -25,7 +28,12 @@ export default function Dashboard() {
             <button
               key={item.id}
               className={`tab-button ${activeTab === item.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => {
+                setActiveTab(item.id);
+                // Clear the shortcut if the user manually navigates away 
+                // from the pipeline flow to another tab
+                if (item.id !== 'connectors') setPreselectedSensorId(null);
+              }}
             >
               {item.label.toUpperCase()}
             </button>
@@ -34,12 +42,23 @@ export default function Dashboard() {
       </header>
 
       <main className="content-area">
-        {activeTab === 'providers' && <ProvidersTab />}
+        {activeTab === 'providers' && (
+          <ProvidersTab 
+            setActiveTab={setActiveTab} 
+            setPreselectedSensor={setPreselectedSensorId} 
+          />
+        )}
+        
         {activeTab === 'parsers' && <ParsersTab />}
+        
         {activeTab === 'consumers' && <ConsumersTab />}
+        
         {activeTab === 'connectors' && (
           <div className="full-width-view">
-            <ConnectorsList />
+            <ConnectorsList 
+              preselectedSensorId={preselectedSensorId} 
+              onClearPreselect={() => setPreselectedSensorId(null)}
+            />
           </div>
         )}
       </main>

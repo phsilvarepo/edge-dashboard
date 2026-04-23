@@ -5,15 +5,15 @@ const { NodeVM } = require('vm2');
  * Creates a sandboxed pipeline that:
  * 1. Listens to MQTT
  * 2. Parses data via a sandboxed function
- * 3. Updates 'parsers_status' and 'consumers_status' for the Dashboard
+ * 3. Updates 'active_parsers' and 'active_consumers' for the Dashboard
  * 4. Executes any attached Consumers
  */
 async function createPipeline(config, db) {
   console.log(`[PIPELINE] Initializing ${config.name}...`);
 
   const definitionsCol = db.collection('component_definitions');
-  const parsersStatusCol = db.collection('parsers_status');
-  const consumersStatusCol = db.collection('consumers_status');
+  const parsersStatusCol = db.collection('active_parsers');
+  const consumersStatusCol = db.collection('active_consumers');
 
   // 1. Fetch Parser Code
   const parserDef = await definitionsCol.findOne({ 

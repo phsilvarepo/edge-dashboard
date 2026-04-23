@@ -12,7 +12,7 @@ async function run() {
   await client.connect();
   const db = client.db();
   
-  const connectorsCol = db.collection('connectors');
+  const connectorsCol = db.collection('active_connectors');
   const definitionsCol = db.collection('component_definitions');
   const providersCol = db.collection('active_providers');
 
@@ -55,7 +55,7 @@ async function run() {
       const parsedResult = await parserFn(livePayload, connector.parserOptions || {});
 
       // Update Parser Status
-      await db.collection("parsers_status").updateOne(
+      await db.collection("active_parsers").updateOne(
         { id: connector.parser, connector: connector.name },
         { $set: { lastRun: new Date() } },
         { upsert: true }
@@ -76,7 +76,7 @@ async function run() {
         await consumerObj.send(parsedResult, connector, options);
 
         // Update Consumer Status
-        await db.collection("consumers_status").updateOne(
+        await db.collection("active_consumers").updateOne(
           { id: consumerName, connector: connector.name },
           { $set: { lastRun: new Date() } },
           { upsert: true }

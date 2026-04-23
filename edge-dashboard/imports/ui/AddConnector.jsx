@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; 
 import { Meteor } from 'meteor/meteor';
 import { useTracker } from 'meteor/react-meteor-data';
 import { Connectors, ProvidersStatus, ComponentDefinitions, ConsumerClients } from '/imports/api/collections';
 import './AddConnectorUI.css'; 
 
-export default function AddConnector({ onComplete }) {
+export default function AddConnector({ onComplete, preselectedSensorId }) {
   const [id, setId] = useState('');
   const [error, setError] = useState('');
   const [selectedSensorId, setSelectedSensorId] = useState('');
@@ -12,14 +12,13 @@ export default function AddConnector({ onComplete }) {
   const [selectedConsumerIds, setSelectedConsumerIds] = useState([]);
   const [consumerParams, setConsumerParams] = useState({});
 
-  // Validation feedback states
   const [sensorLivenessError, setSensorLivenessError] = useState('');
   const [consumerStatus, setConsumerStatus] = useState({});
 
   const { liveSensors, parsers, consumers, managedClients, existingConnectors, isLoading } = useTracker(() => {
     const h1 = Meteor.subscribe('active_providers');
     const h2 = Meteor.subscribe('component_definitions');
-    const h3 = Meteor.subscribe('connectors');
+    const h3 = Meteor.subscribe('active_connectors');
     const h4 = Meteor.subscribe('consumer_clients'); 
     const ready = h1.ready() && h2.ready() && h3.ready() && h4.ready();
 
@@ -32,6 +31,18 @@ export default function AddConnector({ onComplete }) {
       isLoading: !ready,
     };
   });
+
+  useEffect(() => {
+    if (!isLoading && preselectedSensorId) {
+      setSelectedSensorId(preselectedSensorId);
+      
+      const selectedSensor = liveSensors.find(s => s._id === preselectedSensorId);
+      if (selectedSensor) {
+        const isLive = selectedSensor.lastRun && selectedSensor.lastRun >= new Date(Date.now() - 35000);
+        setSensorLivenessError(!isLive ? 'This sensor is not currently publishing data.' : '');
+      }
+    }
+  }, [isLoading, preselectedSensorId, liveSensors]);
 
   const sensor = liveSensors.find(s => s._id === selectedSensorId);
   const parser = parsers.find(p => p._id === selectedParserId);
@@ -53,7 +64,6 @@ export default function AddConnector({ onComplete }) {
     );
   });
 
-  // Reusable Consumer Validation
   const validateConsumerConnection = (consumerId, consumerName, params) => {
     setConsumerStatus(prev => ({ ...prev, [consumerId]: { loading: true } }));
     
@@ -82,13 +92,12 @@ export default function AddConnector({ onComplete }) {
   };
 
   const handleParamChange = (consumerId, consumerName, paramName, value) => {
-    const newParams = { ...(prevParams = (consumerParams[consumerName] || {})), [paramName]: value };
+    const newParams = { ...(consumerParams[consumerName] || {}), [paramName]: value };
     setConsumerParams(prev => ({
       ...prev,
       [consumerName]: newParams
     }));
     
-    // Trigger validation on manual change
     validateConsumerConnection(consumerId, consumerName, newParams);
   };
 
@@ -105,7 +114,6 @@ export default function AddConnector({ onComplete }) {
             ...prev,
             [consumerName]: params
         }));
-        // Trigger validation on saved client selection
         validateConsumerConnection(consumerId, consumerName, params);
     }
   };
@@ -150,9 +158,9 @@ export default function AddConnector({ onComplete }) {
   if (isLoading) return <div className="loading-text">SYNCING ENGINE CORE...</div>;
 
   return (
-    <div className="connector-form-container">
-      <div className="form-header">
-        <h3>Deploy Service Connector</h3>
+    <div className="connector-form-container" style={{ paddingTop: '15px', paddingBottom: '20px' }}>
+      <div className="form-header" style={{ marginBottom: '20px' }}>
+        <h3 style={{ margin: 0 }}>Deploy Service Connector</h3>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -163,7 +171,7 @@ export default function AddConnector({ onComplete }) {
             className={`tech-input ${error ? 'error-input' : ''}`} 
             value={id} 
             onChange={handleIdChange} 
-            placeholder="E.G. JSON_CONVERTER" 
+            placeholder="Enter pipeline ID" 
           />
           {error && <p className="error-text">{error}</p>}
 
@@ -172,7 +180,6 @@ export default function AddConnector({ onComplete }) {
               const val = e.target.value;
               setSelectedSensorId(val);
               
-              // Liveness Check
               const selectedSensor = liveSensors.find(s => s._id === val);
               const isLive = selectedSensor?.lastRun && selectedSensor.lastRun >= new Date(Date.now() - 35000);
               setSensorLivenessError(val && !isLive ? 'This sensor is not currently publishing data.' : '');
@@ -187,7 +194,7 @@ export default function AddConnector({ onComplete }) {
         </div>
 
         <div className={`form-step-wrapper ${isSensorValid ? 'active' : 'locked'}`} style={getStageStyle(isSensorValid)}>
-          <label className="input-label" style={{ color: 'inherit' }}>2. Data Parser</label>
+          <label className="input-label" style={{ color: 'inherit', marginTop: '15px' }}>2. Data Parser</label>
           <select 
             className="tech-select" 
             style={{ color: 'inherit' }}
@@ -204,7 +211,7 @@ export default function AddConnector({ onComplete }) {
         </div>
 
         <div className={`form-step-wrapper ${isParserValid ? 'active' : 'locked'}`} style={getStageStyle(isParserValid)}>
-          <label className="input-label" style={{ color: 'inherit' }}>3. Data Consumers</label>
+          <label className="input-label" style={{ color: 'inherit', marginTop: '15px' }}>3. Data Consumers</label>
           <div className="checkbox-list">
             {!isParserValid && <p className="hint-text" style={{ color: '#8b949e' }}>Define previous nodes.</p>}
             {isParserValid && compatibleConsumers.length === 0 && <p className="error-text">No Available Consumers</p>}
@@ -268,7 +275,7 @@ export default function AddConnector({ onComplete }) {
           </div>
         </div>
 
-        <div className="form-actions">
+        <div className="form-actions" style={{ display: 'flex', justifyContent: 'center', width: '100%', marginTop: '20px' }}>
           <button className="btn-create" type="submit" disabled={!isParserValid || selectedConsumerIds.length === 0}>
             Deploy Connector
           </button>

@@ -9,24 +9,24 @@ const CAPTURE_CONFIGS = {
   MQTT_TASMOTA: {
     label: 'Tasmota MQTT',
     fields: [
-      { id: 'broker', label: 'Broker Address', placeholder: 'eg: mqtt://10.0.200.25:1883', type: 'text' },
+      { id: 'broker', label: 'Broker Address', placeholder: 'e.g. mqtt://10.0.200.25:1883', type: 'text' },
       { id: 'username', label: 'Broker Username', placeholder: 'Optional', type: 'text' },
       { id: 'pass', label: 'Broker Password', placeholder: 'Optional', type: 'text' },
-      { id: 'topic', label: 'Base Topic', placeholder: 'eg: HS4U/tele/tasmota_838A04/SENSOR', type: 'text' }
+      { id: 'topic', label: 'Base Topic', placeholder: 'e.g. HS4U/tele/tasmota_838A04/SENSOR', type: 'text' }
     ]
   },
   MQTT_SHELLY: {
     label: 'Shelly MQTT',
     fields: [
-      { id: 'broker', label: 'Broker Address', placeholder: 'eg: mqtt://10.0.200.25:1883', type: 'text' },
+      { id: 'broker', label: 'Broker Address', placeholder: 'e.g. mqtt://10.0.200.25:1883', type: 'text' },
       { id: 'username', label: 'Broker Username', placeholder: 'Optional', type: 'text' },
       { id: 'pass', label: 'Broker Password', placeholder: 'Optional', type: 'text' },
-      { id: 'topic', label: 'Full MQTT Topic', placeholder: 'eg: HS4U/thermal/thermal_CD4557/IMG', type: 'text' }
+      { id: 'topic', label: 'Full MQTT Topic', placeholder: 'e.g. HS4U/thermal/thermal_CD4557/IMG', type: 'text' }
     ]
   }
 };
 
-export default function ProvidersTab() {
+export default function ProvidersTab({ setActiveTab, setPreselectedSensor }) {
   // --- 1. STATES ---
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [showDiscModal, setShowDiscModal] = useState(false);
@@ -180,7 +180,13 @@ export default function ProvidersTab() {
     return `${displayKey}: ${val}`;
   };
 
-  if (isLoading) return <div className="loading-text">LINKING PROVIDER DATA...</div>;
+  if (isLoading) {
+    return (
+      <div className="loading-container">
+        <div className="loading-circle"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="tab-container">
@@ -195,7 +201,7 @@ export default function ProvidersTab() {
         <div style={{ display: 'flex', gap: '10px' }}>
           {providers.length > 0 && (
             <button 
-              className="btn-primary" // Added this class
+              className="btn-primary"
               onClick={handleClearAll} 
               style={{ 
                 background: '#da3633', 
@@ -205,7 +211,7 @@ export default function ProvidersTab() {
                 borderRadius: '4px', 
                 cursor: 'pointer', 
                 fontWeight: 'bold',
-                height: '34px' // Match height of the discovery button
+                height: '34px'
               }}
             >
               CLEAR ALL
@@ -314,7 +320,6 @@ export default function ProvidersTab() {
         )}
       </div>
 
-      {/* Pagination Controls - Container is ALWAYS here to preserve height */}
       <div className="pagination" style={{ 
         display: 'flex', 
         justifyContent: 'center', 
@@ -356,9 +361,6 @@ export default function ProvidersTab() {
         </button>
       </div>
 
-      {/* --- MODALS --- */}
-
-      {/* Template Info Modal */}
       {selectedTemplate && (
         <div className="modal-overlay" onClick={() => setSelectedTemplate(null)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -372,7 +374,6 @@ export default function ProvidersTab() {
         </div>
       )}
 
-      {/* Wizard Modal */}
       {wizardTemplate && (
         <div className="modal-overlay">
           <div className="modal-content discovery-modal" style={{ maxWidth: '450px' }}>
@@ -400,7 +401,6 @@ export default function ProvidersTab() {
         </div>
       )}
 
-      {/* Sensor Inspector Modal */}
       {selectedSensor && (
         <div className="modal-overlay" onClick={() => setSelectedSensor(null)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -416,7 +416,17 @@ export default function ProvidersTab() {
                 </pre>
               </div>
               <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                <a href={selectedSensor.docs} target="_blank" className="docs-btn" style={{ flex: 1, textAlign: 'center', textDecoration: 'none' }}>📖 DOCS</a>
+                <button 
+                  onClick={() => {
+                    setPreselectedSensor(selectedSensor._id);
+                    setActiveTab('connectors');
+                    setSelectedSensor(null);
+                  }}
+                  className="docs-btn" 
+                  style={{ flex: 1, textAlign: 'center', background: '#238636', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                 USE IN PIPELINE
+                </button>
                 <button onClick={() => handleRemoveInstance(selectedSensor._id)} style={{ background: '#da3633', border: 'none', color: 'white', padding: '0 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>REMOVE</button>
               </div>
             </div>
@@ -424,7 +434,6 @@ export default function ProvidersTab() {
         </div>
       )}
 
-      {/* Discovery Modal */}
       {showDiscModal && (
         <div className="modal-overlay" onClick={() => !isTesting && setShowDiscModal(false)}>
           <div className="modal-content discovery-modal" onClick={e => e.stopPropagation()}>

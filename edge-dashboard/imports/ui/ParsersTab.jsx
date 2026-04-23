@@ -5,9 +5,12 @@ import { ParsersStatus } from '/imports/api/collections';
 import './Tabs.css';
 
 export default function ParsersTab() {
-  const parsers = useTracker(() => {
-    const sub = Meteor.subscribe('parsers_status');
-    return ParsersStatus.find().fetch();
+  const { parsers, isLoading } = useTracker(() => {
+    const sub = Meteor.subscribe('active_parsers');
+    return {
+      parsers: ParsersStatus.find().fetch(),
+      isLoading: !sub.ready(),
+    };
   });
 
   // Check if signal was received in the last 30 seconds
@@ -16,6 +19,14 @@ export default function ParsersTab() {
     const threshold = new Date(Date.now() - 30000);
     return lastRun >= threshold;
   };
+
+  if (isLoading) {
+    return (
+      <div className="loading-container">
+        <div className="loading-circle"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="tab-container">
@@ -32,9 +43,6 @@ export default function ParsersTab() {
               <div className="status-header">
                 <h4>
                   {p.id.toUpperCase()} 
-                  <span className="text-header-dim">
-                    ({p.connector})
-                  </span>
                 </h4>
                 <div className={`pulse-dot ${healthy ? 'active' : ''}`}></div>
               </div>
@@ -53,8 +61,8 @@ export default function ParsersTab() {
                 </div>
 
                 <div className="meta-item">
-                  <span>VERSION</span>
-                  <span className="text-dim">v1.0.2-edge</span>
+                  <span>PIPELINE</span>
+                  <span className="text-dim">{p.connector}</span>
                 </div>
               </div>
             </div>

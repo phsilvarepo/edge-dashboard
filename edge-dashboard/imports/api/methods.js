@@ -2,13 +2,56 @@ import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import mqtt from 'mqtt';
 import * as Minio from 'minio';
-import { Connectors, ParsersStatus, ProvidersStatus, ProvidersTemplate, ConsumerClients, ConsumersStatus, MqttCommands} from './collections';
+import { Connectors, ParsersStatus, ProvidersStatus, ConsumerClients, ConsumersStatus, MqttCommands} from './collections';
 
 Meteor.methods({
   //Method to remove Provider from collection
   async 'providers.removeInstance'(instanceId) {
     check(instanceId, String);
     return await ProvidersStatus.removeAsync(instanceId);
+  },
+
+
+  //Method to remove all Providers
+  async 'providers.removeAll'() {
+    return await ProvidersStatus.removeAsync({});
+  },
+
+  //Method to add trigger MQTT worker to perform Auto-Discovery
+  async 'providers.autoDiscover'(config) {
+    console.log("📡 [Server] Method 'providers.autoDiscover' called with:", config);
+    
+    try {
+      check(config, {
+        brokerUrl: String,
+        username: Match.Maybe(String),
+        password: Match.Maybe(String)
+      });
+      console.log("📋 [Server] Validation passed.");
+
+      const docId = await MqttCommands.insertAsync({
+        type: 'DISCOVERY',
+        params: config,
+        status: 'pending',
+        createdAt: new Date()
+      });
+      
+      console.log("💾 [Server] Command inserted into DB. Doc ID:", docId);
+      return docId;
+    } catch (e) {
+      console.error("🔥 [Server] Method Failure:", e);
+      throw new Meteor.Error('500', e.message);
+    }
+  },
+
+  //Method to add trigger worker to create Sensor
+  'providers.createInstance'({ templateId, method, params }) {
+    return MqttCommands.insertAsync({
+      type: 'CREATE_INSTANCE',
+      data: { templateId, method, params },
+      status: 'pending',
+      createdAt: new Date()
+    });
   },
 
   //Method to add Connector to collection
@@ -34,7 +77,7 @@ Meteor.methods({
     return await ParsersStatus.removeAsync({ connector: connectorName });
   },
 
-  //Add consumer to collection to store useful Consumers
+  //Add consumer to collection to store repetitive Consumers
   async 'consumers.saveClient'({ templateName, params, label }) {
     check(templateName, String);
     check(params, Object);
@@ -146,47 +189,5 @@ Meteor.methods({
     });
 
     return await runTest();
-  },
-
-  //Method to add flag worker to perform auto Discovery
-  async 'providers.autoDiscover'(config) {
-    console.log("📡 [Server] Method 'providers.autoDiscover' called with:", config);
-    
-    try {
-      check(config, {
-        brokerUrl: String,
-        username: Match.Maybe(String),
-        password: Match.Maybe(String)
-      });
-      console.log("📋 [Server] Validation passed.");
-
-      const docId = await MqttCommands.insertAsync({
-        type: 'DISCOVERY',
-        params: config,
-        status: 'pending',
-        createdAt: new Date()
-      });
-      
-      console.log("💾 [Server] Command inserted into DB. Doc ID:", docId);
-      return docId;
-    } catch (e) {
-      console.error("🔥 [Server] Method Failure:", e);
-      throw new Meteor.Error('500', e.message);
-    }
-  },
-
-  //Method to add flag worker to create Sensor
-  'providers.createInstance'({ templateId, method, params }) {
-    return MqttCommands.insertAsync({
-      type: 'CREATE_INSTANCE',
-      data: { templateId, method, params },
-      status: 'pending',
-      createdAt: new Date()
-    });
-  },
-
-  //Method to remove all Providers
-  async 'providers.removeAll'() {
-    return await ProvidersStatus.removeAsync({});
   }
 });

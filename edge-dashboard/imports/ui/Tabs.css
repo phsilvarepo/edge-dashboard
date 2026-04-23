@@ -511,3 +511,26 @@
 .action-btn.test:hover:not(:disabled) { background: rgba(88, 166, 255, 0.1); color: #58a6ff; }
 .action-btn.remove:hover { background: rgba(248, 81, 73, 0.1); color: #f85149; }
 .action-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+
+/* Container to center the spinner in the tab area */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px; /* Adjust based on your tab height */
+  width: 100%;
+}
+
+/* The actual loading circle */
+.loading-circle {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  border-top-color: #58a6ff; /* Match your theme's blue accent */
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

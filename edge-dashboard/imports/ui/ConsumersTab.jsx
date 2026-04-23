@@ -23,7 +23,7 @@ export default function ConsumersTab() {
   const [verifyResults, setVerifyResults] = useState({});
 
   const { activeSinks, templates, managedClients, isLoading } = useTracker(() => {
-    const h1 = Meteor.subscribe('consumers_status');
+    const h1 = Meteor.subscribe('active_consumers');
     const h2 = Meteor.subscribe('component_definitions');
     const h3 = Meteor.subscribe('consumer_clients');
     
@@ -125,14 +125,20 @@ export default function ConsumersTab() {
     setTestError('');
   };
 
-  if (isLoading) return <div className="loading-text">SYNCING CONSUMER HUB...</div>;
+  if (isLoading) {
+    return (
+      <div className="loading-container">
+        <div className="loading-circle"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="tab-container">
       
       {/* SECTION 1: LIVE SINKS */}
       <div className="section-header">
-        <h2>ACTIVE DATA CONSUMERS</h2>
+        <h2>DATA CONSUMERS</h2>
       </div>
       <div className="status-grid">
         {activeSinks.map(c => {
@@ -140,12 +146,13 @@ export default function ConsumersTab() {
           return (
             <div className="status-card" key={c._id}>
               <div className="status-header">
-                <h4 style={{ color: '#58a6ff' }}>{c.id.toUpperCase()} <span className="text-dim">({c.connector})</span></h4>
+                <h4 style={{ color: '#58a6ff' }}>{c.id.toUpperCase()}</h4>
                 <div className={`pulse-dot ${active ? 'active' : ''}`}></div>
               </div>
               <div className="status-meta">
                 <div className="meta-item"><span>STATE</span><span style={{ color: active ? '#3fb950' : '#8b949e' }}>{active ? 'OPERATIONAL' : 'STANDBY'}</span></div>
                 <div className="meta-item"><span>LAST SYNC</span><span>{c.lastRun ? c.lastRun.toLocaleTimeString() : 'NEVER'}</span></div>
+                <div className="meta-item"><span>PIPELINE</span><span>{c.connector}</span></div>
               </div>
             </div>
           );

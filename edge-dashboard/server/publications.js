@@ -5,15 +5,15 @@ Meteor.publish('active_providers', function () {
   return ProvidersStatus.find();
 });
 
-Meteor.publish('parsers_status', function () {
+Meteor.publish('active_parsers', function () {
   return ParsersStatus.find();
 });
 
-Meteor.publish('consumers_status', function () {
+Meteor.publish('active_consumers', function () {
   return ConsumersStatus.find();
 });
 
-Meteor.publish('connectors', function () {
+Meteor.publish('active_connectors', function () {
   return Connectors.find();
 });
 

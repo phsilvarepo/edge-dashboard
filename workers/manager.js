@@ -12,7 +12,7 @@ async function runManager() {
   const client = new MongoClient(MONGO_URL);
   await client.connect();
   const db = client.db();
-  const connectorsCol = db.collection('connectors');
+  const connectorsCol = db.collection('active_connectors');
 
   console.log("📑 MANAGER: Watching MongoDB for Connector changes...");
 

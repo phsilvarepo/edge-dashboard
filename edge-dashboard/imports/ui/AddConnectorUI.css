@@ -5,6 +5,8 @@
   border-radius: 12px;
   max-width: 100%;
   box-sizing: border-box;
+  /* Ensure the container uses the app's default font */
+  font-family: inherit;
 }
 
 .form-header {
@@ -53,7 +55,8 @@
   color: #ffffff;
   padding: 0 15px;
   border-radius: 8px;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  /* CHANGED: Removed Monospace */
+  font-family: inherit;
   font-size: 14px;
   transition: all 0.2s ease;
   box-sizing: border-box;
@@ -65,7 +68,8 @@
   font-weight: 700;
   margin-top: 8px;
   letter-spacing: 0.5px;
-  font-family: 'JetBrains Mono', monospace;
+  /* CHANGED: Removed Monospace */
+  font-family: inherit;
   animation: fadeIn 0.2s ease-out;
 }
 
@@ -77,7 +81,8 @@
   color: #ffffff;
   padding: 0 10px;
   border-radius: 6px;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace; /* Matches tech-input */
+  /* CHANGED: Removed Monospace */
+  font-family: inherit;
   font-size: 12px;
   transition: all 0.2s ease;
   box-sizing: border-box;
@@ -141,26 +146,14 @@
   margin-bottom: 10px;
   cursor: pointer;
   color: #c9d1d9;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  /* CHANGED: Removed Monospace */
+  font-family: inherit;
 }
 
 .tech-checkbox-label input[type="checkbox"] {
   width: 16px;
   height: 16px;
   accent-color: #58a6ff;
-}
-
-form {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-}
-
-.form-actions {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
 }
 
 .btn-create {
@@ -179,35 +172,16 @@ form {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   margin: 0 auto; 
   min-width: 240px;
+  /* Ensure button uses correct font */
+  font-family: inherit;
 }
 
 .hint-text {
-  font-family: 'JetBrains Mono', monospace;
+  /* CHANGED: Removed Monospace */
+  font-family: inherit;
   font-size: 11px;
   letter-spacing: 0.5px;
   text-transform: uppercase;
-}
-
-.btn-create:hover:not(:disabled) {
-  background-color: #2ea043;
-  transform: translateY(-1px);
-}
-
-.btn-create:disabled {
-  background-color: #21262d;
-  color: #484f58;
-  cursor: not-allowed;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(5px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.consumer-item-wrapper {
-  margin-bottom: 10px;
-  border-left: 2px solid transparent;
-  padding-left: 5px;
 }
 
 .consumer-params-box {
@@ -220,17 +194,6 @@ form {
   border: 1px solid #30363d;
 }
 
-.param-input-group {
-  margin-bottom: 8px;
-}
-
-.param-label {
-  display: block;
-  font-size: 11px;
-  color: #8b949e;
-  margin-bottom: 3px;
-}
-
 .tech-input-small {
   width: 100%;
   background: #0d1117;
@@ -240,14 +203,6 @@ form {
   font-size: 13px;
   border-radius: 6px;
   box-sizing: border-box;
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.tech-input.error-input {
-  border-color: #f85149;
-  background-color: rgba(248, 81, 73, 0.05);
-}
-
-.tech-input.error-input:focus {
-  box-shadow: 0 0 0 3px rgba(248, 81, 73, 0.15);
+  /* CHANGED: Removed Monospace */
+  font-family: inherit;
 }
